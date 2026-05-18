@@ -1,0 +1,78 @@
+@import url('https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700&family=Inter:wght@400;500;600&display=swap');
+
+:root {
+  --bg-dark: #0d0f12;
+  --sidebar-bg: #13151a;
+  --panel-bg: #1a1d24;
+  --panel-bg-hover: #222630;
+  --border-color: #2a2d35;
+  --text-main: #f0f2f5;
+  --text-muted: #8b949e;
+  --accent-red: #e53935;
+  --accent-red-hover: #ef5350;
+  --accent-red-bg: rgba(229, 57, 53, 0.15);
+  
+  --font-sans: 'Inter', -apple-system, sans-serif;
+  --font-head: 'Outfit', sans-serif;
+}
+
+.light-theme {
+  --bg-dark: #f8f9fa;
+  --sidebar-bg: #ffffff;
+  --panel-bg: #ffffff;
+  --panel-bg-hover: #f1f3f5;
+  --border-color: #e5e7eb;
+  --text-main: #1f2937;
+  --text-muted: #6b7280;
+  --accent-red: #dc2626;
+  --accent-red-hover: #b91c1c;
+  --accent-red-bg: rgba(220, 38, 38, 0.1);
+}
+
+
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: var(--bg-dark);
+  color: var(--text-main);
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+button {
+  font-family: var(--font-sans);
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+}
+
+input, select, textarea {
+  font-family: var(--font-sans);
+}
+
+h1, h2, h3, h4, h5, h6 {
+  font-family: var(--font-head);
+  font-weight: 600;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: var(--bg-dark);
+}
+::-webkit-scrollbar-thumb {
+  background: #30363d;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #484f58;
+}
