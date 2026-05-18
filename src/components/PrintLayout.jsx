@@ -4,7 +4,7 @@ const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duratio
   return (
     <div ref={ref} className="print-layout">
       <div className="print-header">
-        <h1>LiteracyOS Daily Report</h1>
+        <h1>Reading to Writing Daily Report</h1>
         <div className="print-meta">
           <div><strong>Student:</strong> {studentName}</div>
           <div><strong>Date:</strong> {date}</div>

@@ -185,7 +185,7 @@ export default function App() {
     const dateStr = new Date().toISOString().split('T')[0];
     const opt = {
       margin:       0.5,
-      filename:     `LiteracyOS_Report_${safeName}_${dateStr}.pdf`,
+      filename:     `Reading_to_Writing_Report_${safeName}_${dateStr}.pdf`,
       image:        { type: 'jpeg', quality: 0.98 },
       html2canvas:  { scale: 2 },
       jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
@@ -386,7 +386,7 @@ export default function App() {
       <aside className="app-sidebar" style={{overflowY: 'auto'}}>
         <div className="sidebar-logo">
           <div className="logo-dot"></div>
-          LITERACY SUPERAPP
+          READING TO WRITING APP
         </div>
 
         <div className="sidebar-dropdowns" style={{marginBottom: 0}}>

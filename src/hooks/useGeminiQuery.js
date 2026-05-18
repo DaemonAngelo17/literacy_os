@@ -43,7 +43,7 @@ export function useGeminiQuery() {
     setIsLoading(true);
     setError(null);
     try {
-      const systemInstruction = "You are LiteracyOS AI. " + 
+      const systemInstruction = "You are Reading to Writing AI. " + 
         (errorMemory.length > 0 && !isErrorLogger ? `Student's Recent Errors context: ${JSON.stringify(errorMemory)}` : "");
       
       const payload = {
