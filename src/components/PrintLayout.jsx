@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 
-const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duration, skills, material, checkedSteps, scores, activities, errors }, ref) => {
+const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duration, skills, material, checkedSteps, scores, activities, errors, sessionNotes, vocabList, vocabVisibility }, ref) => {
   return (
     <div ref={ref} className="print-layout">
       <div className="print-header">
@@ -50,6 +50,43 @@ const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duratio
           )) : <li>No errors logged today.</li>}
         </ul>
       </div>
+
+      {sessionNotes && (
+        <div className="print-section" style={{pageBreakInside: 'avoid'}}>
+          <h2>Instructor Observations</h2>
+          <blockquote style={{fontStyle: 'italic', borderLeft: '3px solid #ccc', paddingLeft: '12px', color: '#555', margin: '16px 0'}}>
+            <p style={{whiteSpace: 'pre-line', margin: 0}}>{sessionNotes}</p>
+          </blockquote>
+        </div>
+      )}
+
+      {vocabList && vocabList.length > 0 && (
+        <div className="print-section" style={{pageBreakInside: 'avoid'}}>
+          <h2>Homework: Vocabulary List</h2>
+          <table className="print-table">
+            <thead>
+              <tr>
+                <th>Word</th>
+                {vocabVisibility?.showPos && <th>Part of Speech</th>}
+                {vocabVisibility?.showDefinition && <th>Definition</th>}
+                {vocabVisibility?.showKorean && <th>Korean</th>}
+                {vocabVisibility?.showAssociation && <th>Association</th>}
+              </tr>
+            </thead>
+            <tbody>
+              {vocabList.map((v, i) => (
+                <tr key={i}>
+                  <td><strong>{v.word}</strong></td>
+                  {vocabVisibility?.showPos && <td>{v.pos}</td>}
+                  {vocabVisibility?.showDefinition && <td>{v.definition}</td>}
+                  {vocabVisibility?.showKorean && <td>{v.koreanTranslation}</td>}
+                  {vocabVisibility?.showAssociation && <td>{v.wordAssociation}</td>}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
     </div>
   );
 });

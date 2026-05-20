@@ -15,6 +15,7 @@ import PrintLayout from './components/PrintLayout';
 import ToolErrorBoundary from './components/ToolErrorBoundary';
 import { ThesisSchema, CrossLingualSchema, PeerSchema, QuizSchema, SummarySchema } from './utils/schemas';
 import { ELA_TAXONOMY } from './utils/elaTaxonomy';
+import { useDropzone } from 'react-dropzone';
 import './App.css';
 
 const GRADE_LEVELS = ['Elementary (Grades K-2)', 'Upper Elementary (Grades 3-5)', 'Middle School (Grades 6-8)', 'High School (Grades 9-12)', 'Higher Education', 'Adult Learner'];
@@ -42,7 +43,6 @@ const ALL_AI_TOOLS = [
   { id: 'peer', title: 'Peer-Review Sandbox', desc: 'Compare draft against rubric & error history.', promptPrefix: () => 'Output JSON strictly formatted as: { "glows": ["...","..."], "grows": ["...","..."] }. Evaluate this draft paragraph specifically considering the student\'s recent error history:', type: 'PEER', color: '#8b5cf6' },
   { id: 'quiz', title: 'Dynamic Quiz', desc: 'MCQ, Cloze, and Open-ended questions.', promptPrefix: (prof) => `Output JSON strictly formatted as: { "quiz": { "mcq": [{"question": "...", "answer": "..."}], "cloze": [{"question": "...", "answer": "..."}], "open": [{"question": "..."}] } }. Generate 2 MCQ, 2 Cloze, and 1 Open-ended question for a ${prof} student based on this text:`, type: 'QUIZ', color: '#8b5cf6' },
   { id: 'summary', title: 'Summary Synthesizer', desc: 'Tiered scaffolding for summarizing.', promptPrefix: () => 'Output JSON strictly formatted as: { "tiers": { "beginner": "Cloze format summary...", "intermediate": "Sentence starter framework...", "advanced": "Inquiry outline format..." } }. Summarize this text:', type: 'SUMMARY', color: '#3b82f6' },
-  { id: 'vocab', title: 'Vocab Homework Maker', desc: 'Extract contextual academic vocabulary.', promptPrefix: () => `Output ONLY a raw JSON array. No markdown, no conversational text. Extract up to 42 high-value academic vocabulary words from this text in this format: [{ "word": "example", "pos": "noun", "definition": "A representative form or pattern.", "koreanTranslation": "예시", "wordAssociation": "model, sample" }]. Text:`, type: 'VOCAB', color: '#10b981' },
   { id: 'error', title: 'Error Logger', desc: 'Track errors. Feeds into AI memory!', promptPrefix: () => 'You are an error correction logger. Review these student errors, categorize them, and output concise teacher feedback.', type: 'GENERIC', color: 'var(--accent-red)' }
 ];
 
@@ -77,8 +77,10 @@ export default function App() {
   
   const [vocabList, setVocabList] = useLocalStorageState(`${sessionKey}_vocab_list`, []);
   const [vocabVisibility, setVocabVisibility] = useLocalStorageState(`${sessionKey}_vocab_vis`, { showPos: true, showDefinition: true, showKorean: true, showAssociation: true });
+  const [sessionNotes, setSessionNotes] = useLocalStorageState(`${sessionKey}_notes`, '');
   
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
+  const [isLoadingVocab, setIsLoadingVocab] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   
   // Encrypted API Key
@@ -158,6 +160,7 @@ export default function App() {
     setShowVocabOverride(false);
     setVocabOverrideJson('');
     setVocabOverrideError('');
+    setSessionNotes('');
   };
 
   const handleTextSelection = () => {
@@ -167,6 +170,49 @@ export default function App() {
     } else {
       setToolInput(material);
     }
+  };
+
+  const onDrop = useCallback((acceptedFiles) => {
+    const file = acceptedFiles[0];
+    if (file) {
+      if (file.type.startsWith('text/') || file.name.endsWith('.txt')) {
+        const reader = new FileReader();
+        reader.onload = () => {
+          setMaterial(prev => prev ? prev + '\n\n' + reader.result : reader.result);
+        };
+        reader.readAsText(file);
+      } else {
+        setMaterial(prev => prev ? prev + `\n\n[Attached File: ${file.name}]\n(Note: Text extraction from PDF/Images requires an external OCR/Parser not present in this standalone build. Please paste text directly.)` : `[Attached File: ${file.name}]\n(Note: Text extraction from PDF/Images requires an external OCR/Parser not present in this standalone build. Please paste text directly.)`);
+      }
+    }
+  }, []);
+  const { getRootProps, getInputProps, isDragActive, open: openDropzone } = useDropzone({ onDrop, noClick: true, noKeyboard: true });
+
+  const handleGenerateVocab = async () => {
+    const apiKey = decryptData(encryptedApiKey);
+    if (!apiKey) { alert("Please configure AI API KEY in App Settings first."); return; }
+    
+    setIsLoadingVocab(true);
+    setVocabOverrideError('');
+    const prompt = `Output ONLY a raw JSON array. No markdown, no conversational text. Extract up to 42 high-value academic vocabulary words from this text in this format: [{ "word": "example", "pos": "noun", "definition": "A representative form or pattern.", "koreanTranslation": "예시", "wordAssociation": "model, sample" }]. Text:`;
+    
+    const result = await executeQuery(apiKey, prompt, material || 'No specific material', false, null);
+    setIsLoadingVocab(false);
+
+    if (result) {
+      try {
+        const cleaned = result.replace(/```json|```/gi, '').trim();
+        const rawData = JSON.parse(cleaned);
+        const data = Array.isArray(rawData) ? rawData : (rawData.vocab || rawData.items || []);
+        if (data.length > 0) {
+          setVocabList(data);
+          return;
+        }
+      } catch (e) {
+        console.error("Vocab parsing failed:", e);
+      }
+    }
+    triggerToolFallback('Vocab Homework Maker', 'Extract up to 42 high-value academic vocabulary words.', 'Raw JSON array exactly like: [{ "word": "example", "pos": "noun", "definition": "...", "koreanTranslation": "...", "wordAssociation": "..." }]');
   };
 
   const triggerToolFallback = (toolName, instruction, formatRule) => {
@@ -1090,6 +1136,17 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                   ))}
                 </div>
 
+                <div style={{marginBottom: '16px', marginTop: '16px'}}>
+                  <label style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', display: 'block'}}>Teacher's Session Notes (Internal)</label>
+                  <textarea 
+                    className="custom-input custom-scrollbar" 
+                    placeholder="Log qualitative observations about the student's performance..."
+                    value={sessionNotes}
+                    onChange={e => setSessionNotes(e.target.value)}
+                    style={{width: '100%', minHeight: '100px', resize: 'vertical', fontSize: '0.85rem'}}
+                  />
+                </div>
+
                 {!pdfFailed ? (
                   <button className="btn-primary" onClick={handleDownload} style={{marginTop: '24px'}} disabled={!isGenerated}>
                     <Download size={16} /> Download Daily Report (PDF)
@@ -1120,6 +1177,9 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
              scores={scores}
              activities={activities}
              errors={errorMemory}
+             sessionNotes={sessionNotes}
+             vocabList={vocabList}
+             vocabVisibility={vocabVisibility}
            />
         </div>
 
