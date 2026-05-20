@@ -98,6 +98,10 @@ export default function App() {
   const [showToolbox, setShowToolbox] = useState(false);
   const [expandedTaxonomy, setExpandedTaxonomy] = useState(null);
 
+  // Fail-Safe States
+  const [failSafeModal, setFailSafeModal] = useState({ isOpen: false, type: '', promptContent: '' });
+  const [pdfFailed, setPdfFailed] = useState(false);
+
   const printRef = useRef();
   const { executeQuery, isLoading: isToolLoading, error: toolError } = useGeminiQuery();
   const { errorMemory } = useAILogger();
@@ -136,6 +140,7 @@ export default function App() {
     setTimerSeconds(0);
     setIsTimerRunning(false);
     setShowClearConfirm(false);
+    setPdfFailed(false);
   };
 
   const handleTextSelection = () => {
@@ -145,6 +150,39 @@ export default function App() {
     } else {
       setToolInput(material);
     }
+  };
+
+  const triggerToolFallback = (toolName, instruction, formatRule) => {
+    const skillListStr = selectedSkills.map(s => `${s.category} (${s.microSkills.join(', ')})`).join('; ');
+    const fallbackPrompt = `Act as an expert ELA instructional designer. My automated system failed, and I need you to perform the function of the ${toolName} for my class. 
+STUDENT PROFILE: ${studentName}
+GRADE LEVEL: ${grade}
+PROFICIENCY: ${proficiency}
+TARGET SKILLS: ${skillListStr || 'None specified'}
+SOURCE TEXT: ${toolInput || material || 'None'}
+STUDENT'S RECENT ERRORS: ${JSON.stringify(errorMemory)}
+TASK: ${instruction}
+STRICT FORMATTING RULE: You must format your output EXACTLY according to the following markdown template. Do not include introductory or concluding conversational text. 
+TEMPLATE: ${formatRule}`;
+
+    setFailSafeModal({ isOpen: true, type: 'TOOL', promptContent: fallbackPrompt });
+  };
+
+  const triggerReportFallback = () => {
+    const checkedSteps = activeSteps.filter(s => stepStatus[s.num] === 'checked').map(s => `${s.num}. ${s.title}`);
+    const acts = activities.map(a => `${a.title}: ${a.score}`).join('\n- ');
+    const fallbackPrompt = `Act as a professional educational administrator. My automated PDF generator crashed, and I need you to format this raw class session data into a clean, professional 'Daily Student Progress Report' that I can print. 
+RAW DATA: 
+- Date: ${new Date().toLocaleDateString()}
+- Student: ${studentName}
+- Completed Roadmap Steps: ${JSON.stringify(checkedSteps)}
+- Assignment Score: ${scores.assignment}
+- Vocab Assignment Score: ${scores.vocabAssignment}
+- Vocab Quiz Score: ${scores.vocabQuiz}
+- Activities / Module Scores: \n- ${acts}
+STRICT FORMATTING RULE: Format this data into a highly organized Markdown document using clear headings (H1, H2), bulleted lists for the completed steps, and a clean Markdown table for the scores. Ensure the tone is professional and ready to be handed to a parent or administrator. Do not invent any data.`;
+
+    setFailSafeModal({ isOpen: true, type: 'REPORT', promptContent: fallbackPrompt });
   };
 
   const handleGenerate = async () => {
@@ -182,10 +220,13 @@ export default function App() {
       }
     }
     
-    alert("Failed to generate dynamic lesson plan. Falling back to default template.");
     setGeneratedSteps(DAILY_FLOW_STEPS);
     setIsGenerated(true);
     setStepStatus({});
+    
+    const instruction = `Create a highly detailed, 12-step pedagogical lesson plan. The class duration is ${duration}. Break down the total time across the 12 steps, detailing exactly how many minutes each step should take in the 'duration' field. The 'desc' must be a detailed, minute-by-minute guide.`;
+    const formatRule = `Output JSON strictly formatted as: { "steps": [ { "num": 1, "title": "...", "duration": "...", "desc": "..." } ] }`;
+    triggerToolFallback('12-Step Generator', instruction, formatRule);
   };
 
   const toggleSkill = (skill) => setSelectedSkills(prev => prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]);
@@ -194,17 +235,22 @@ export default function App() {
   const handleRemoveActivity = (id) => setActivities(prev => prev.filter(a => a.id !== id));
   const updateActivity = (id, field, value) => setActivities(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
 
-  const handleDownload = () => {
-    const safeName = studentName.replace(/[^a-z0-9]/gi, '_');
-    const dateStr = new Date().toISOString().split('T')[0];
-    const opt = {
-      margin:       0.5,
-      filename:     `Reading_to_Writing_Report_${safeName}_${dateStr}.pdf`,
-      image:        { type: 'jpeg', quality: 0.98 },
-      html2canvas:  { scale: 2 },
-      jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
-    };
-    html2pdf().set(opt).from(printRef.current).save();
+  const handleDownload = async () => {
+    try {
+      const safeName = studentName.replace(/[^a-z0-9]/gi, '_');
+      const dateStr = new Date().toISOString().split('T')[0];
+      const opt = {
+        margin:       0.5,
+        filename:     `Reading_to_Writing_Report_${safeName}_${dateStr}.pdf`,
+        image:        { type: 'jpeg', quality: 0.98 },
+        html2canvas:  { scale: 2 },
+        jsPDF:        { unit: 'in', format: 'letter', orientation: 'portrait' }
+      };
+      await html2pdf().set(opt).from(printRef.current).save();
+    } catch (e) {
+      console.error("PDF Engine Failed:", e);
+      setPdfFailed(true);
+    }
   };
 
   // TOOL ENGINE
@@ -227,7 +273,11 @@ export default function App() {
     
     let isErrorLogger = activeTool.title.includes("Error Correction");
     const result = await executeQuery(apiKey, activeTool.promptPrefix, toolInput, isErrorLogger, selectedSkills);
-    if (result) setToolOutput(result);
+    if (result) {
+      setToolOutput(result);
+    } else {
+      triggerToolFallback(activeTool.title, 'Generate the standard output for this tool.', activeTool.promptPrefix);
+    }
   };
 
   // Parse Outputs Based on Type
@@ -351,6 +401,34 @@ export default function App() {
   return (
     <div className={`app-layout ${isDarkMode ? '' : 'light-theme'}`}>
       
+      {/* ── FAIL-SAFE OVERRIDE MODAL ── */}
+      {failSafeModal.isOpen && (
+        <div className="modal-overlay" style={{zIndex: 9999}}>
+          <div className="modal-content" style={{border: '2px solid var(--accent-red)', maxWidth: '700px'}}>
+            <div className="modal-header">
+              <div>
+                <h2 style={{color: 'var(--accent-red)', display: 'flex', alignItems: 'center', gap: '8px'}}><AlertCircle size={20} /> Manual LLM Override Required</h2>
+                <p>The automated system has failed. Copy the prompt below into ChatGPT, Claude, or Gemini directly.</p>
+              </div>
+              <button className="icon-btn" onClick={() => setFailSafeModal({ isOpen: false, type: '', promptContent: '' })}><X size={20} /></button>
+            </div>
+            <div className="modal-body">
+              <textarea 
+                className="custom-input custom-scrollbar" 
+                style={{minHeight: '250px', resize: 'vertical', fontSize: '0.85rem', fontFamily: 'monospace', backgroundColor: 'rgba(0,0,0,0.2)'}}
+                value={failSafeModal.promptContent}
+                readOnly
+              />
+              <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '16px'}}>
+                <button className="btn-primary" onClick={() => navigator.clipboard.writeText(failSafeModal.promptContent)} style={{backgroundColor: 'var(--accent-red)'}}>
+                  Copy to Clipboard
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ── LLM TOOL MODAL ── */}
       {activeTool && (
         <div className="modal-overlay">
@@ -779,9 +857,15 @@ export default function App() {
                   ))}
                 </div>
 
-                <button className="btn-primary" onClick={handleDownload} style={{marginTop: '24px'}} disabled={!isGenerated}>
-                  <Download size={16} /> Download Daily Report (PDF)
-                </button>
+                {!pdfFailed ? (
+                  <button className="btn-primary" onClick={handleDownload} style={{marginTop: '24px'}} disabled={!isGenerated}>
+                    <Download size={16} /> Download Daily Report (PDF)
+                  </button>
+                ) : (
+                  <button className="btn-primary" onClick={triggerReportFallback} style={{marginTop: '24px', backgroundColor: 'var(--accent-red)'}}>
+                    <AlertCircle size={16} style={{marginRight: '8px'}} /> Export Failed - Generate via AI Override
+                  </button>
+                )}
               </>
             )}
 
