@@ -77,6 +77,8 @@ export default function App() {
   
   const [vocabList, setVocabList] = useLocalStorageState(`${sessionKey}_vocab_list`, []);
   const [vocabVisibility, setVocabVisibility] = useLocalStorageState(`${sessionKey}_vocab_vis`, { showPos: true, showDefinition: true, showKorean: true, showAssociation: true });
+  const [vocabWordCount, setVocabWordCount] = useLocalStorageState(`${sessionKey}_vocab_count`, 15);
+  const [seedWords, setSeedWords] = useLocalStorageState(`${sessionKey}_seed_words`, '');
   const [sessionNotes, setSessionNotes] = useLocalStorageState(`${sessionKey}_notes`, '');
   const [learningMatrix, setLearningMatrix] = useLocalStorageState(`${sessionKey}_matrix`, null);
   
@@ -202,7 +204,14 @@ export default function App() {
     
     setIsLoadingVocab(true);
     setVocabOverrideError('');
-    const prompt = `Output ONLY a raw JSON array. No markdown, no conversational text. Extract up to 42 high-value academic vocabulary words from this text in this format: [{ "word": "example", "pos": "noun", "definition": "A representative form or pattern.", "koreanTranslation": "예시", "wordAssociation": "model, sample" }]. Text:`;
+    
+    let prompt = '';
+    const trimmedSeeds = seedWords.trim();
+    if (trimmedSeeds) {
+      prompt = `Output ONLY a raw JSON array. No markdown, no conversational text. MANDATORY INCLUSION: You MUST include and define the following specific words in your JSON array: [${trimmedSeeds}]. After defining these, extract additional high-value academic vocabulary from the SOURCE TEXT until your array contains exactly ${vocabWordCount} total words. Format: [{ "word": "example", "pos": "noun", "definition": "A representative form or pattern.", "koreanTranslation": "예시", "wordAssociation": "model, sample" }]. Text:`;
+    } else {
+      prompt = `Output ONLY a raw JSON array. No markdown, no conversational text. Extract exactly ${vocabWordCount} high-value academic vocabulary words from this text in this format: [{ "word": "example", "pos": "noun", "definition": "A representative form or pattern.", "koreanTranslation": "예시", "wordAssociation": "model, sample" }]. Text:`;
+    }
     
     const result = await executeQuery(apiKey, prompt, material || 'No specific material', false, null);
     setIsLoadingVocab(false);
@@ -220,7 +229,7 @@ export default function App() {
         console.error("Vocab parsing failed:", e);
       }
     }
-    triggerToolFallback('Vocab Homework Maker', 'Extract up to 42 high-value academic vocabulary words.', 'Raw JSON array exactly like: [{ "word": "example", "pos": "noun", "definition": "...", "koreanTranslation": "...", "wordAssociation": "..." }]');
+    triggerToolFallback('Vocab Homework Maker', `Extract exactly ${vocabWordCount} high-value academic vocabulary words.`, 'Raw JSON array exactly like: [{ "word": "example", "pos": "noun", "definition": "...", "koreanTranslation": "...", "wordAssociation": "..." }]');
   };
 
   const handleGenerateMatrix = async () => {
@@ -352,19 +361,18 @@ REQUIRED SCHEMATIC FORMAT:
   const triggerToolFallback = (toolName, instruction, formatRule) => {
     let fallbackPrompt;
     if (toolName === 'Vocab Homework Maker') {
-      fallbackPrompt = `Act as an expert ESL linguist. My system failed, and I need you to extract up to 42 high-value academic vocabulary words from the text below. 
-SOURCE TEXT: ${toolInput || material || 'None'}
+      const trimmedSeeds = seedWords.trim();
+      fallbackPrompt = `Act as an expert ESL linguist. My system failed, and I need you to generate a vocabulary list of EXACTLY ${vocabWordCount} words based on the parameters below.
+
+SOURCE TEXT:
+${material || '[Insert Reading Material]'}
+
+MANDATORY WORDS: [${trimmedSeeds ? trimmedSeeds : "None provided. Extract all words from the source text."}]
+
+TASK: ${trimmedSeeds ? "First, define the MANDATORY WORDS. Then, extract additional high-value words from the SOURCE TEXT to reach the exact total." : "Extract high-value academic vocabulary from the SOURCE TEXT."}
+
 STRICT FORMATTING RULE: Output ONLY a raw JSON array. No markdown, no conversational text. 
-SCHEMA: 
-[
-  { 
-    "word": "example", 
-    "pos": "noun", 
-    "definition": "A representative form or pattern.", 
-    "koreanTranslation": "예시", 
-    "wordAssociation": "model, sample" 
-  }
-]`;
+SCHEMA: [{ "word": "example", "pos": "noun", "definition": "...", "koreanTranslation": "...", "wordAssociation": "..." }]`;
     } else {
       const skillListStr = selectedSkills.map(s => `${s.category} (${s.microSkills.join(', ')})`).join('; ');
       fallbackPrompt = `Act as an expert ELA instructional designer. My automated system failed, and I need you to perform the function of the ${toolName} for my class. 
@@ -1100,6 +1108,32 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                       )}
                     </h3>
                   </div>
+                  {!isStudentView && !showVocabOverride && (
+                    <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
+                      <input 
+                        type="number" 
+                        className="custom-input" 
+                        style={{width: '70px', padding: '6px', fontSize: '0.85rem'}} 
+                        value={vocabWordCount} 
+                        onChange={e => setVocabWordCount(e.target.value)} 
+                        title="Number of Words"
+                        min="1"
+                        max="50"
+                      />
+                      <input 
+                        type="text" 
+                        className="custom-input" 
+                        style={{width: '250px', padding: '6px', fontSize: '0.85rem'}}
+                        placeholder="Mandatory words (comma-separated)..." 
+                        value={seedWords} 
+                        onChange={e => setSeedWords(e.target.value)} 
+                        title="Seed Words"
+                      />
+                      <button className="btn-primary" onClick={handleGenerateVocab} disabled={isLoadingVocab || !material} style={{padding: '6px 12px', fontSize: '0.75rem'}}>
+                        {isLoadingVocab ? 'GENERATING...' : 'Generate Vocab'}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {showVocabOverride ? (
