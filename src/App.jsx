@@ -101,6 +101,9 @@ export default function App() {
   // Fail-Safe States
   const [failSafeModal, setFailSafeModal] = useState({ isOpen: false, type: '', promptContent: '' });
   const [pdfFailed, setPdfFailed] = useState(false);
+  const [showOverrideInput, setShowOverrideInput] = useState(false);
+  const [overrideJson, setOverrideJson] = useState('');
+  const [overrideError, setOverrideError] = useState('');
 
   const printRef = useRef();
   const { executeQuery, isLoading: isToolLoading, error: toolError } = useGeminiQuery();
@@ -141,6 +144,9 @@ export default function App() {
     setIsTimerRunning(false);
     setShowClearConfirm(false);
     setPdfFailed(false);
+    setShowOverrideInput(false);
+    setOverrideJson('');
+    setOverrideError('');
   };
 
   const handleTextSelection = () => {
@@ -224,9 +230,54 @@ STRICT FORMATTING RULE: Format this data into a highly organized Markdown docume
     setIsGenerated(true);
     setStepStatus({});
     
-    const instruction = `Create a highly detailed, 12-step pedagogical lesson plan. The class duration is ${duration}. Break down the total time across the 12 steps, detailing exactly how many minutes each step should take in the 'duration' field. The 'desc' must be a detailed, minute-by-minute guide.`;
-    const formatRule = `Output JSON strictly formatted as: { "steps": [ { "num": 1, "title": "...", "duration": "...", "desc": "..." } ] }`;
-    triggerToolFallback('12-Step Generator', instruction, formatRule);
+    const fallbackPrompt = `Act as an expert ELA instructional designer. Generate a customized 12-step reading-to-writing lesson plan based on the parameters below.
+STUDENT PROFILE: ${studentName}
+GRADE LEVEL: ${grade}
+TARGET SKILLS: ${skillListStr || 'None specified'}
+SOURCE TEXT: ${material || 'None'}
+
+STRICT FORMATTING RULE: You must output ONLY a raw, valid JSON array. Do not include markdown formatting, conversational text, or code blocks (like \`\`\`json). I will be piping this directly into an application parser. 
+The JSON must be an array of exactly 12 objects. Each object must represent the standard LiteracyOS phases: 
+1. Caterpillar (Vocab), 2. Review, 3. Focus Skill, 4. Background Knowledge, 5. Annotate, 6. Orienteering, 7. Discuss, 8. Recall/Review, 9. Exercises/Seatwork, 10. Recap, 11. Assign Homework, 12. Upload Report.
+
+JSON SCHEMA TO FOLLOW:
+[
+  {
+    "id": 1,
+    "title": "1. Caterpillar",
+    "bullets": ["Adapt bullet 1 to text...", "Adapt bullet 2 to text..."]
+  }
+]
+Make sure the 'bullets' array contains actionable, specific instructions tailored to the SOURCE TEXT and TARGET SKILLS.`;
+
+    setFailSafeModal({ isOpen: true, type: 'PLAN', promptContent: fallbackPrompt });
+  };
+
+  const handleApplyOverride = () => {
+    setOverrideError('');
+    try {
+      const cleaned = overrideJson.replace(/```json|```/gi, '').trim();
+      const parsedPlan = JSON.parse(cleaned);
+      if (!Array.isArray(parsedPlan)) throw new Error("Parsed data is not an array");
+      
+      const mappedSteps = parsedPlan.map((s, idx) => {
+        if (!s.title) throw new Error(`Missing 'title' property at index ${idx}`);
+        return {
+          num: s.id || (idx + 1),
+          title: s.title.replace(/^\d+\.\s*/, ''),
+          desc: s.bullets && Array.isArray(s.bullets) ? '• ' + s.bullets.join('\n• ') : (s.desc || ''),
+          duration: s.duration || ''
+        };
+      });
+
+      setGeneratedSteps(mappedSteps);
+      setIsGenerated(true);
+      setStepStatus({});
+      setShowOverrideInput(false);
+      setOverrideJson('');
+    } catch (e) {
+      setOverrideError("Invalid format. Please ensure you copied only the JSON output.");
+    }
   };
 
   const toggleSkill = (skill) => setSelectedSkills(prev => prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]);
@@ -804,7 +855,19 @@ STRICT FORMATTING RULE: Format this data into a highly organized Markdown docume
             <div className="sequence-header">
               <div>
                 <div className="seq-kicker">INTERACTIVE SEQUENCE</div>
-                <h3 className="seq-title">12-Step Roadmap</h3>
+                <h3 className="seq-title" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                  12-Step Roadmap
+                  {!isStudentView && (
+                    <button 
+                      className="icon-btn" 
+                      onClick={() => setShowOverrideInput(!showOverrideInput)} 
+                      title="Manual Override / Paste AI Plan"
+                      style={{color: showOverrideInput ? 'var(--accent-red)' : 'var(--text-muted)'}}
+                    >
+                      <PenTool size={16} />
+                    </button>
+                  )}
+                </h3>
               </div>
               {isGenerated && (
                 <div className="progress-ring-container" style={{padding: '8px 16px', margin: 0}}>
@@ -813,26 +876,43 @@ STRICT FORMATTING RULE: Format this data into a highly organized Markdown docume
               )}
             </div>
 
-            {isGenerated ? activeSteps.map(step => {
-              const status = stepStatus[step.num];
-              return (
-                <div className={`task-card ${status || ''}`} key={step.num}>
-                  <div className="task-header">
-                    <div className="task-title">
-                      {step.num}. {step.title}
-                      {step.duration && <span style={{fontSize: '0.75rem', color: 'var(--accent-red)', marginLeft: '8px', fontWeight: 'normal'}}>{step.duration}</span>}
-                    </div>
-                    {!isStudentView && (
-                      <div className="task-actions" data-html2canvas-ignore="true">
-                        <button className="task-btn check-btn" onClick={() => handleStepAction(step.num, 'checked')}><Check size={14} /></button>
-                        <button className="task-btn pass-btn" onClick={() => handleStepAction(step.num, 'passed')}><X size={14} /></button>
-                      </div>
-                    )}
-                  </div>
-                  <div className="task-meta"><span style={{whiteSpace: 'pre-line'}} className="meta-val">{step.desc}</span></div>
+            {showOverrideInput ? (
+              <div style={{padding: '16px', backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px'}}>
+                <label style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', display: 'block'}}>Manual Override / Paste AI Plan JSON</label>
+                <textarea 
+                  className="custom-input custom-scrollbar" 
+                  style={{minHeight: '200px', resize: 'vertical', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%'}}
+                  placeholder='Paste the JSON from external AI here...'
+                  value={overrideJson}
+                  onChange={e => setOverrideJson(e.target.value)}
+                />
+                {overrideError && <div style={{color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '8px'}}>{overrideError}</div>}
+                <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '12px'}}>
+                  <button className="btn-primary" onClick={handleApplyOverride}>Apply Custom Plan</button>
                 </div>
-              );
-            }) : <p style={{color: 'var(--text-muted)'}}>Upload material to unlock flow.</p>}
+              </div>
+            ) : (
+              isGenerated ? activeSteps.map(step => {
+                const status = stepStatus[step.num];
+                return (
+                  <div className={`task-card ${status || ''}`} key={step.num}>
+                    <div className="task-header">
+                      <div className="task-title">
+                        {step.num}. {step.title}
+                        {step.duration && <span style={{fontSize: '0.75rem', color: 'var(--accent-red)', marginLeft: '8px', fontWeight: 'normal'}}>{step.duration}</span>}
+                      </div>
+                      {!isStudentView && (
+                        <div className="task-actions" data-html2canvas-ignore="true">
+                          <button className="task-btn check-btn" onClick={() => handleStepAction(step.num, 'checked')}><Check size={14} /></button>
+                          <button className="task-btn pass-btn" onClick={() => handleStepAction(step.num, 'passed')}><X size={14} /></button>
+                        </div>
+                      )}
+                    </div>
+                    <div className="task-meta"><span style={{whiteSpace: 'pre-line'}} className="meta-val">{step.desc}</span></div>
+                  </div>
+                );
+              }) : <p style={{color: 'var(--text-muted)'}}>Upload material to unlock flow.</p>
+            )}
 
             {/* SCORING & EXPORT */}
             {!isStudentView && (
