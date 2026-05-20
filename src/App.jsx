@@ -584,7 +584,7 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
 
   const handleDownload = () => {
     if (editableRoadmapSteps.length === 0 && generatedSteps.length > 0) {
-      setEditableRoadmapSteps([...generatedSteps]);
+      setEditableRoadmapSteps(generatedSteps.map(s => `${s.title}\n${s.desc}`));
     }
     setIsDownloadModalOpen(true);
   };
@@ -833,13 +833,13 @@ Please format your final feedback clearly with a summary of their performance, a
                   <div style={{fontWeight: 'bold', color: 'var(--text-muted)', paddingTop: '8px', minWidth: '24px'}}>{idx + 1}.</div>
                   <textarea
                     className="custom-input custom-scrollbar"
-                    value={step.replace(/^-\s*/, '')}
+                    value={step}
                     onChange={e => {
                       const newSteps = [...editableRoadmapSteps];
                       newSteps[idx] = e.target.value;
                       setEditableRoadmapSteps(newSteps);
                     }}
-                    style={{width: '100%', minHeight: '60px', fontSize: '0.85rem', resize: 'vertical'}}
+                    style={{width: '100%', minHeight: '80px', fontSize: '0.85rem', resize: 'vertical'}}
                   />
                 </div>
               ))}
@@ -1747,7 +1747,7 @@ Please format your final feedback clearly with a summary of their performance, a
              duration={duration}
              skills={selectedSkills.map(s => `${s.category} (${s.microSkills.length})`)}
              material={material}
-             roadmapText={editableRoadmapSteps.map((step, i) => `${i+1}. ${step.replace(/^-\s*/, '')}`).join('\n\n')}
+             roadmapText={editableRoadmapSteps.map((step, i) => `${i+1}. ${step}`).join('\n\n')}
              learningMatrix={learningMatrix}
              aiFinalFeedback={aiFinalFeedback}
              scores={scores}
