@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import html2pdf from 'html2pdf.js';
 import { 
   Grid, Calendar, Lock, Moon, Sun, Unlock, Settings, Eye, EyeOff,
