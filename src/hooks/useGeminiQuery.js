@@ -39,12 +39,16 @@ export function useGeminiQuery() {
     }
   };
 
-  const executeQuery = async (apiKey, promptPrefix, material, isErrorLogger = false) => {
+  const executeQuery = async (apiKey, promptPrefix, material, isErrorLogger = false, targetedSkills = null) => {
     setIsLoading(true);
     setError(null);
     try {
+      let skillInstruction = targetedSkills && targetedSkills.length > 0
+        ? `\n\nThe teacher has specifically targeted the following ELA skills for this material: ${JSON.stringify(targetedSkills)}. You MUST align your generated content, questions, activities, and rubrics strictly to these targeted skills and micro-skills.`
+        : "";
+
       const systemInstruction = "You are Reading to Writing AI. " + 
-        (errorMemory.length > 0 && !isErrorLogger ? `Student's Recent Errors context: ${JSON.stringify(errorMemory)}` : "");
+        (errorMemory.length > 0 && !isErrorLogger ? `Student's Recent Errors context: ${JSON.stringify(errorMemory)}` : "") + skillInstruction;
       
       const payload = {
         contents: [

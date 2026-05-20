@@ -14,12 +14,12 @@ import { useAILogger } from './contexts/AILoggerContext';
 import PrintLayout from './components/PrintLayout';
 import ToolErrorBoundary from './components/ToolErrorBoundary';
 import { ThesisSchema, CrossLingualSchema, PeerSchema, QuizSchema, SummarySchema } from './utils/schemas';
+import { ELA_TAXONOMY } from './utils/elaTaxonomy';
 import './App.css';
 
 const GRADE_LEVELS = ['Elementary (Grades K-2)', 'Upper Elementary (Grades 3-5)', 'Middle School (Grades 6-8)', 'High School (Grades 9-12)', 'Higher Education', 'Adult Learner'];
 const PROFICIENCIES = ['Beginner (A1-A2)', 'Intermediate (B1-B2)', 'Advanced (C1-C2)', 'Native / Fluent'];
 const DURATIONS = ['25 Minutes', '50 Minutes (1 Hour)', '100 Minutes (2 Hours)'];
-const SKILLS = ['Connections', 'Predicting', 'Visualizing', 'Inferencing', 'Questioning', 'Comprehension', 'Text Navigation', 'Main Idea & Detail', 'Critical Analysis', 'Digital Literacy', 'Information Processing', 'Study Methods', 'Summarization', 'Structure', 'Coherence', 'Expression'];
 
 const DAILY_FLOW_STEPS = [
   { num: 1, title: 'Caterpillar', desc: '• Distribute and review the vocabulary homework (1-42 words).\n• Administer the short vocab quiz to assess retention and meaning accuracy.' },
@@ -66,7 +66,7 @@ export default function App() {
   const [grade, setGrade] = useLocalStorageState(`${sessionKey}_grade`, GRADE_LEVELS[2]);
   const [proficiency, setProficiency] = useLocalStorageState(`${sessionKey}_prof`, PROFICIENCIES[1]);
   const [duration, setDuration] = useLocalStorageState(`${sessionKey}_dur`, DURATIONS[1]);
-  const [selectedSkills, setSelectedSkills] = useLocalStorageState(`${sessionKey}_skills`, [SKILLS[3]]);
+  const [selectedSkills, setSelectedSkills] = useLocalStorageState(`${sessionKey}_skills_hierarchical`, []);
   const [material, setMaterial] = useLocalStorageState(`${sessionKey}_mat`, '');
   const [isGenerated, setIsGenerated] = useLocalStorageState(`${sessionKey}_gen`, false);
   const [generatedSteps, setGeneratedSteps] = useLocalStorageState(`${sessionKey}_gen_steps`, []);
@@ -96,6 +96,7 @@ export default function App() {
 
   const [favoriteTools, setFavoriteTools] = useLocalStorageState('literacy_os_fav_tools', ['thesis', 'summary', 'error']);
   const [showToolbox, setShowToolbox] = useState(false);
+  const [expandedTaxonomy, setExpandedTaxonomy] = useState(null);
 
   const printRef = useRef();
   const { executeQuery, isLoading: isToolLoading, error: toolError } = useGeminiQuery();
@@ -161,9 +162,10 @@ export default function App() {
     }
 
     setIsGeneratingPlan(true);
-    const prompt = `Output JSON strictly formatted as: { "steps": [ { "num": 1, "title": "...", "duration": "...", "desc": "..." } ] }. Create a highly detailed, 12-step pedagogical lesson plan for a ${grade} student with ${proficiency} proficiency. The class duration is ${duration}. The target skills are: ${selectedSkills.join(', ')}. Break down the ${duration} total time across the 12 steps, detailing exactly how many minutes each step should take in the 'duration' field. The 'desc' must be a detailed, minute-by-minute guide. ${material ? 'The reading material is: ' + material : 'Provide a generalized lesson flow for these skills without specific reading material.'}`;
+    const skillListStr = selectedSkills.map(s => `${s.category} (${s.microSkills.join(', ')})`).join('; ');
+    const prompt = `Output JSON strictly formatted as: { "steps": [ { "num": 1, "title": "...", "duration": "...", "desc": "..." } ] }. Create a highly detailed, 12-step pedagogical lesson plan for a ${grade} student with ${proficiency} proficiency. The class duration is ${duration}. The target skills are: ${skillListStr}. Break down the ${duration} total time across the 12 steps, detailing exactly how many minutes each step should take in the 'duration' field. The 'desc' must be a detailed, minute-by-minute guide. ${material ? 'The reading material is: ' + material : 'Provide a generalized lesson flow for these skills without specific reading material.'}`;
     
-    const result = await executeQuery(apiKey, prompt, material || 'No specific material', false);
+    const result = await executeQuery(apiKey, prompt, material || 'No specific material', false, selectedSkills);
     setIsGeneratingPlan(false);
 
     if (result) {
@@ -224,7 +226,7 @@ export default function App() {
     if (!toolInput.trim()) return;
     
     let isErrorLogger = activeTool.title.includes("Error Correction");
-    const result = await executeQuery(apiKey, activeTool.promptPrefix, toolInput, isErrorLogger);
+    const result = await executeQuery(apiKey, activeTool.promptPrefix, toolInput, isErrorLogger, selectedSkills);
     if (result) setToolOutput(result);
   };
 
@@ -508,19 +510,74 @@ export default function App() {
                 </div>
               </div>
               
-              <div className="dropdown-group">
+              <div className="dropdown-group" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 <label className="dropdown-label">ADMIN: TARGET SKILLS</label>
-                <div className="skills-checklist-container" style={{maxHeight: '120px'}}>
-                  {SKILLS.map(s => (
-                    <label key={s} className="skills-checklist-label">
-                      <input 
-                        type="checkbox" 
-                        checked={selectedSkills.includes(s)}
-                        onChange={() => toggleSkill(s)}
-                      />
-                      {s}
-                    </label>
-                  ))}
+                <div className="taxonomy-accordion custom-scrollbar" style={{ flex: 1, overflowY: 'auto', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '4px', backgroundColor: 'var(--panel-bg)', minHeight: '150px' }}>
+                  {ELA_TAXONOMY.map(tax => {
+                    const isExpanded = expandedTaxonomy === tax.category;
+                    const selectedNode = selectedSkills.find(s => s.category === tax.category);
+                    const isAllSelected = selectedNode && selectedNode.microSkills.length === tax.microSkills.length;
+                    const isSomeSelected = selectedNode && selectedNode.microSkills.length > 0 && !isAllSelected;
+
+                    return (
+                      <div key={tax.category} className="taxonomy-node" style={{ marginBottom: '4px' }}>
+                        <div className="taxonomy-header" style={{ display: 'flex', alignItems: 'center', padding: '8px', backgroundColor: 'var(--bg-main)', border: '1px solid var(--border-color)', borderRadius: '4px', cursor: 'pointer' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={isAllSelected}
+                            ref={el => { if (el) el.indeterminate = isSomeSelected; }}
+                            onChange={(e) => {
+                              e.stopPropagation();
+                              if (isAllSelected) {
+                                setSelectedSkills(prev => prev.filter(s => s.category !== tax.category));
+                              } else {
+                                setSelectedSkills(prev => [...prev.filter(s => s.category !== tax.category), { category: tax.category, microSkills: [...tax.microSkills] }]);
+                              }
+                            }}
+                            style={{ marginRight: '8px' }}
+                          />
+                          <span style={{ fontSize: '0.85rem', flex: 1, fontWeight: '600' }} onClick={() => setExpandedTaxonomy(isExpanded ? null : tax.category)}>
+                            {tax.category}
+                          </span>
+                          <span style={{ fontSize: '0.75rem', color: 'var(--text-muted)' }}>
+                            {selectedNode ? `${selectedNode.microSkills.length}/${tax.microSkills.length}` : ''}
+                          </span>
+                        </div>
+                        
+                        {isExpanded && (
+                          <div className="taxonomy-children" style={{ paddingLeft: '24px', marginTop: '4px', marginBottom: '8px' }}>
+                            {tax.microSkills.map(micro => {
+                              const isMicroSelected = selectedNode?.microSkills.includes(micro);
+                              return (
+                                <label key={micro} style={{ display: 'flex', alignItems: 'flex-start', fontSize: '0.8rem', padding: '4px 0', cursor: 'pointer', color: isMicroSelected ? 'var(--text-main)' : 'var(--text-muted)' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={!!isMicroSelected}
+                                    onChange={() => {
+                                      let currentMicro = selectedNode ? [...selectedNode.microSkills] : [];
+                                      if (isMicroSelected) {
+                                        currentMicro = currentMicro.filter(m => m !== micro);
+                                      } else {
+                                        currentMicro.push(micro);
+                                      }
+                                      
+                                      setSelectedSkills(prev => {
+                                        const withoutNode = prev.filter(s => s.category !== tax.category);
+                                        if (currentMicro.length === 0) return withoutNode;
+                                        return [...withoutNode, { category: tax.category, microSkills: currentMicro }];
+                                      });
+                                    }}
+                                    style={{ marginRight: '8px', marginTop: '2px' }}
+                                  />
+                                  <span style={{flex: 1, lineHeight: '1.4'}}>{micro}</span>
+                                </label>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
 
@@ -597,7 +654,7 @@ export default function App() {
               </div>
             )}
             <div className="info-row"><strong>Level:</strong> {grade}</div>
-            {!isStudentView && <div className="info-row"><strong>Skills:</strong> {selectedSkills.join(', ') || 'None'}</div>}
+            {!isStudentView && <div className="info-row"><strong>Skills:</strong> {selectedSkills.length > 0 ? selectedSkills.map(s => s.category).join(', ') : 'None'}</div>}
             <div className="info-row"><strong>Time:</strong> {currentTime.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
           </div>
         </header>
@@ -740,7 +797,7 @@ export default function App() {
              grade={grade}
              proficiency={proficiency}
              duration={duration}
-             skills={selectedSkills}
+             skills={selectedSkills.map(s => `${s.category} (${s.microSkills.length})`)}
              material={material}
              checkedSteps={activeSteps.filter(s => stepStatus[s.num] === 'checked').map(s => `${s.num}. ${s.title}`)}
              scores={scores}
