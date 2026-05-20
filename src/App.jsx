@@ -895,6 +895,35 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                   </select>
                 </div>
               </div>
+
+              <div className="dropdown-group">
+                <label className="dropdown-label">ADMIN: VOCAB SETTINGS</label>
+                <div style={{display: 'flex', gap: '8px', flexDirection: 'column'}}>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <span style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Word Count:</span>
+                    <input 
+                      type="number" 
+                      className="custom-input" 
+                      style={{width: '70px', padding: '6px', fontSize: '0.85rem'}} 
+                      value={vocabWordCount} 
+                      onChange={e => setVocabWordCount(e.target.value)} 
+                      min="1"
+                      max="50"
+                    />
+                  </div>
+                  <div>
+                    <span style={{fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px'}}>Mandatory Words (comma-separated):</span>
+                    <input 
+                      type="text" 
+                      className="custom-input" 
+                      style={{width: '100%', padding: '6px', fontSize: '0.85rem'}}
+                      placeholder="e.g. apple, tree..." 
+                      value={seedWords} 
+                      onChange={e => setSeedWords(e.target.value)} 
+                    />
+                  </div>
+                </div>
+              </div>
               
               <div className="dropdown-group" style={{ flex: 1, display: 'flex', flexDirection: 'column', minHeight: 0 }}>
                 <label className="dropdown-label">ADMIN: TARGET SKILLS</label>
@@ -1110,25 +1139,6 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                   </div>
                   {!isStudentView && !showVocabOverride && (
                     <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
-                      <input 
-                        type="number" 
-                        className="custom-input" 
-                        style={{width: '70px', padding: '6px', fontSize: '0.85rem'}} 
-                        value={vocabWordCount} 
-                        onChange={e => setVocabWordCount(e.target.value)} 
-                        title="Number of Words"
-                        min="1"
-                        max="50"
-                      />
-                      <input 
-                        type="text" 
-                        className="custom-input" 
-                        style={{width: '250px', padding: '6px', fontSize: '0.85rem'}}
-                        placeholder="Mandatory words (comma-separated)..." 
-                        value={seedWords} 
-                        onChange={e => setSeedWords(e.target.value)} 
-                        title="Seed Words"
-                      />
                       <button className="btn-primary" onClick={handleGenerateVocab} disabled={isLoadingVocab || !material} style={{padding: '6px 12px', fontSize: '0.75rem'}}>
                         {isLoadingVocab ? 'GENERATING...' : 'Generate Vocab'}
                       </button>
