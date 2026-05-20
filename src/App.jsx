@@ -98,8 +98,9 @@ export default function App() {
   
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [classDate, setClassDate] = useState(new Date().toISOString().split('T')[0]);
-  const [classTimeRange, setClassTimeRange] = useState('');
-  const [editableRoadmapText, setEditableRoadmapText] = useState('');
+  const [classStartTime, setClassStartTime] = useState('');
+  const [classEndTime, setClassEndTime] = useState('');
+  const [editableRoadmapSteps, setEditableRoadmapSteps] = useState([]);
   const [aiFinalFeedback, setAiFinalFeedback] = useState('');
   
   // Encrypted API Key
@@ -582,8 +583,8 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
   const updateActivity = (id, field, value) => setActivities(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
 
   const handleDownload = () => {
-    if (!editableRoadmapText && generatedSteps.length > 0) {
-      setEditableRoadmapText(generatedSteps.map(s => `- ${s}`).join('\n'));
+    if (editableRoadmapSteps.length === 0 && generatedSteps.length > 0) {
+      setEditableRoadmapSteps([...generatedSteps]);
     }
     setIsDownloadModalOpen(true);
   };
@@ -809,25 +810,43 @@ Please format your final feedback clearly with a summary of their performance, a
             <button className="icon-btn" onClick={() => setIsDownloadModalOpen(false)}><X size={24}/></button>
           </div>
 
-          <div style={{display:'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px'}}>
+          <div style={{display:'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginBottom: '24px'}}>
             <div>
               <label className="dropdown-label">CLASS DATE</label>
               <input type="date" className="custom-input" value={classDate} onChange={e => setClassDate(e.target.value)} style={{width: '100%'}} />
             </div>
             <div>
-              <label className="dropdown-label">TIME RANGE</label>
-              <input type="text" className="custom-input" placeholder="e.g., 10:00 AM - 11:30 AM" value={classTimeRange} onChange={e => setClassTimeRange(e.target.value)} style={{width: '100%'}} />
+              <label className="dropdown-label">START TIME</label>
+              <input type="time" className="custom-input" value={classStartTime} onChange={e => setClassStartTime(e.target.value)} style={{width: '100%'}} />
+            </div>
+            <div>
+              <label className="dropdown-label">END TIME</label>
+              <input type="time" className="custom-input" value={classEndTime} onChange={e => setClassEndTime(e.target.value)} style={{width: '100%'}} />
             </div>
           </div>
 
           <div style={{marginBottom: '24px'}}>
             <label className="dropdown-label">EDITABLE 12-STEP ROADMAP (Appears on PDF)</label>
-            <textarea 
-              className="custom-input custom-scrollbar" 
-              value={editableRoadmapText} 
-              onChange={e => setEditableRoadmapText(e.target.value)} 
-              style={{width: '100%', minHeight: '150px', fontSize: '0.85rem'}}
-            />
+            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+              {editableRoadmapSteps.map((step, idx) => (
+                <div key={idx} style={{display: 'flex', alignItems: 'flex-start', gap: '12px'}}>
+                  <div style={{fontWeight: 'bold', color: 'var(--text-muted)', paddingTop: '8px', minWidth: '24px'}}>{idx + 1}.</div>
+                  <textarea
+                    className="custom-input custom-scrollbar"
+                    value={step.replace(/^-\s*/, '')}
+                    onChange={e => {
+                      const newSteps = [...editableRoadmapSteps];
+                      newSteps[idx] = e.target.value;
+                      setEditableRoadmapSteps(newSteps);
+                    }}
+                    style={{width: '100%', minHeight: '60px', fontSize: '0.85rem', resize: 'vertical'}}
+                  />
+                </div>
+              ))}
+              {editableRoadmapSteps.length === 0 && (
+                <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>No roadmap generated yet.</p>
+              )}
+            </div>
           </div>
 
           <div style={{marginBottom: '24px'}}>
@@ -1722,13 +1741,13 @@ Please format your final feedback clearly with a summary of their performance, a
              ref={printRef}
              studentName={studentName}
              date={classDate || new Date().toLocaleDateString()}
-             timeRange={classTimeRange}
+             timeRange={classStartTime && classEndTime ? `${classStartTime} - ${classEndTime}` : ''}
              grade={grade}
              proficiency={proficiency}
              duration={duration}
              skills={selectedSkills.map(s => `${s.category} (${s.microSkills.length})`)}
              material={material}
-             roadmapText={editableRoadmapText}
+             roadmapText={editableRoadmapSteps.map((step, i) => `${i+1}. ${step.replace(/^-\s*/, '')}`).join('\n\n')}
              learningMatrix={learningMatrix}
              aiFinalFeedback={aiFinalFeedback}
              scores={scores}
