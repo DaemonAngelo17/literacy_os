@@ -1045,14 +1045,25 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
               <h3 className="seq-title" style={{marginBottom: '16px'}}>Reading Material</h3>
             </div>
             {!isGenerated ? (
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px'}}>
+              <div {...getRootProps()} style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px', border: isDragActive ? '2px dashed var(--accent-red)' : '1px solid transparent', backgroundColor: isDragActive ? 'var(--bg-hover)' : 'transparent', transition: 'all 0.2s ease', padding: isDragActive ? '16px' : '0', borderRadius: '8px'}}>
+                <input {...getInputProps()} />
+                {!isStudentView && (
+                  <div 
+                    className="dropzone-header" 
+                    onClick={openDropzone}
+                    style={{padding: '16px', border: '2px dashed var(--border-color)', borderRadius: '8px', marginBottom: '16px', textAlign: 'center', cursor: 'pointer', backgroundColor: 'var(--panel-bg)', color: 'var(--text-muted)'}}
+                  >
+                    <UploadCloud size={24} style={{marginBottom: '8px', color: 'var(--accent-red)'}} />
+                    <p style={{fontSize: '0.85rem', margin: 0, fontWeight: 500}}>Drag & Drop PDF, DOCX, or Images here — or click to browse.</p>
+                  </div>
+                )}
                 <textarea 
-                  className="textarea-gen"
+                  className="textarea-gen custom-scrollbar"
                   placeholder="Paste the reading material here (Optional)..."
                   value={material}
                   onChange={e => setMaterial(e.target.value)}
                   readOnly={isStudentView}
-                  style={{ flex: 1, marginBottom: '16px' }}
+                  style={{ flex: 1, marginBottom: '16px', resize: 'vertical' }}
                 ></textarea>
                 {!isStudentView && (
                   <button className="btn-primary" onClick={handleGenerate} disabled={isGeneratingPlan || selectedSkills.length === 0}>
