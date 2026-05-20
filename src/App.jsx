@@ -5,7 +5,7 @@ import {
   Map, BookA, Download, PenTool, CheckCircle,
   Check, X, UploadCloud, ScrollText, TableProperties, Plus, Trash2,
   Languages, Mic2, AlertCircle, Play, Pause, RotateCcw, Key, 
-  BarChart, Target, FileText, LayoutList, BookOpen, MessageCircle, TextSelect, Trash
+  BarChart, Target, FileText, LayoutList, BookOpen, MessageCircle, TextSelect, Trash, Star
 } from 'lucide-react';
 import { useGeminiQuery } from './hooks/useGeminiQuery';
 import { useLocalStorageState } from './hooks/useLocalStorageState';
@@ -34,6 +34,15 @@ const DAILY_FLOW_STEPS = [
   { num: 10, title: 'Recap', desc: '• Storytelling or reporting phase.\n• Students may present their findings or record a short video summarizing their learning.' },
   { num: 11, title: 'Assign Homework', desc: '• Assign and thoroughly explain the homework.\n• Ensure students understand the rubric and expectations.' },
   { num: 12, title: 'Upload Report', desc: '• Final documentation.\n• Ensure all digital assignments, reports, or videos are uploaded to the learning portal.' }
+];
+
+const ALL_AI_TOOLS = [
+  { id: 'thesis', title: 'Thesis Generator', desc: 'Tiered thesis statements & arguments.', promptPrefix: () => 'Output JSON strictly formatted as: { "theses": [ { "level": "baseline", "statement": "...", "args": ["...","..."] }, { "level": "intermediate", "statement": "...", "args": ["...","..."] }, { "level": "advanced", "statement": "...", "args": ["...","..."] } ] }. Based on this text:', type: 'THESIS', color: '#8b5cf6' },
+  { id: 'decoder', title: 'Cross-Lingual Decoder', desc: 'Literal, synonym, & Korean equivalents.', promptPrefix: (prof) => `Output JSON strictly formatted as: { "items": [ { "original": "...", "literal": "...", "synonym": "...", "korean": "..." } ] }. Find 3-5 complex idioms or difficult words matching a ${prof} student in this text:`, type: 'CROSS_LINGUAL', color: '#8b5cf6' },
+  { id: 'peer', title: 'Peer-Review Sandbox', desc: 'Compare draft against rubric & error history.', promptPrefix: () => 'Output JSON strictly formatted as: { "glows": ["...","..."], "grows": ["...","..."] }. Evaluate this draft paragraph specifically considering the student\'s recent error history:', type: 'PEER', color: '#8b5cf6' },
+  { id: 'quiz', title: 'Dynamic Quiz', desc: 'MCQ, Cloze, and Open-ended questions.', promptPrefix: (prof) => `Output JSON strictly formatted as: { "quiz": { "mcq": [{"question": "...", "answer": "..."}], "cloze": [{"question": "...", "answer": "..."}], "open": [{"question": "..."}] } }. Generate 2 MCQ, 2 Cloze, and 1 Open-ended question for a ${prof} student based on this text:`, type: 'QUIZ', color: '#8b5cf6' },
+  { id: 'summary', title: 'Summary Synthesizer', desc: 'Tiered scaffolding for summarizing.', promptPrefix: () => 'Output JSON strictly formatted as: { "tiers": { "beginner": "Cloze format summary...", "intermediate": "Sentence starter framework...", "advanced": "Inquiry outline format..." } }. Summarize this text:', type: 'SUMMARY', color: '#3b82f6' },
+  { id: 'error', title: 'Error Logger', desc: 'Track errors. Feeds into AI memory!', promptPrefix: () => 'You are an error correction logger. Review these student errors, categorize them, and output concise teacher feedback.', type: 'GENERIC', color: 'var(--accent-red)' }
 ];
 
 const formatTime = (totalSeconds) => {
@@ -84,6 +93,9 @@ export default function App() {
   const [toolOutput, setToolOutput] = useState('');
   const [toolType, setToolType] = useState('GENERIC');
   const [summaryTier, setSummaryTier] = useState('beginner');
+
+  const [favoriteTools, setFavoriteTools] = useLocalStorageState('literacy_os_fav_tools', ['thesis', 'summary', 'error']);
+  const [showToolbox, setShowToolbox] = useState(false);
 
   const printRef = useRef();
   const { executeQuery, isLoading: isToolLoading, error: toolError } = useGeminiQuery();
@@ -194,9 +206,9 @@ export default function App() {
   };
 
   // TOOL ENGINE
-  const openTool = (title, desc, prefix, type = 'GENERIC') => {
-    setActiveTool({ title, desc, promptPrefix: prefix });
-    setToolType(type);
+  const openTool = (tool) => {
+    setActiveTool({ title: tool.title, desc: tool.desc, promptPrefix: tool.promptPrefix(proficiency) });
+    setToolType(tool.type);
     
     const selectedText = window.getSelection().toString().trim();
     setToolInput(selectedText || material); 
@@ -377,6 +389,43 @@ export default function App() {
                   </ToolErrorBoundary>
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── TOOLBOX MANAGER MODAL ── */}
+      {showToolbox && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{maxWidth: '800px'}}>
+            <div className="modal-header">
+              <div>
+                <h2>Manage Toolbox</h2>
+                <p>Star your favorite tools to pin them to your live workspace.</p>
+              </div>
+              <button className="icon-btn" onClick={() => setShowToolbox(false)}><X size={20} /></button>
+            </div>
+            <div className="modal-body" style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px'}}>
+              {ALL_AI_TOOLS.map(tool => {
+                const isFav = favoriteTools.includes(tool.id);
+                return (
+                  <div key={tool.id} className="tool-card" style={{borderColor: isFav ? tool.color : 'var(--border-color)', opacity: isFav ? 1 : 0.6, display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', cursor: 'default'}}>
+                    <div>
+                      <div className="tool-card-title">{tool.title}</div>
+                      <div className="tool-card-desc">{tool.desc}</div>
+                    </div>
+                    <button 
+                      className="icon-btn" 
+                      onClick={() => {
+                        setFavoriteTools(prev => isFav ? prev.filter(id => id !== tool.id) : [...prev, tool.id]);
+                      }}
+                      style={{color: isFav ? '#fbbf24' : 'var(--text-muted)'}}
+                    >
+                      <Star size={20} fill={isFav ? '#fbbf24' : 'none'} />
+                    </button>
+                  </div>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -590,39 +639,26 @@ export default function App() {
             {/* AI TOOL HUB */}
             {!isStudentView && (
               <>
-                <div className="seq-kicker">AI TOOL HUB</div>
-                <h3 className="seq-title">Pedagogical Toolkit</h3>
+                <div className="sequence-header" style={{marginBottom: 16}}>
+                  <div>
+                    <div className="seq-kicker">AI TOOL HUB</div>
+                    <h3 className="seq-title">Pedagogical Toolkit</h3>
+                  </div>
+                  <button className="icon-btn" onClick={() => setShowToolbox(true)} title="Manage Toolbox">
+                    <LayoutList size={20} />
+                  </button>
+                </div>
                 
                 <div className="tool-hub-grid">
-                  <div className="tool-card" style={{borderColor: '#8b5cf6'}} onClick={() => openTool('Thesis Generator', 'Generate 3 tiered thesis options.', 'Output JSON strictly formatted as: { "theses": [ { "level": "baseline", "statement": "...", "args": ["...","..."] }, { "level": "intermediate", "statement": "...", "args": ["...","..."] }, { "level": "advanced", "statement": "...", "args": ["...","..."] } ] }. Based on this text:', 'THESIS')}>
-                    <div className="tool-card-title">Thesis Generator</div>
-                    <div className="tool-card-desc">Tiered thesis statements & arguments.</div>
-                  </div>
-
-                  <div className="tool-card" style={{borderColor: '#8b5cf6'}} onClick={() => openTool('Instant Translator / Idiom Decoder', 'Cross-lingual vocabulary breakdown.', `Output JSON strictly formatted as: { "items": [ { "original": "...", "literal": "...", "synonym": "...", "korean": "..." } ] }. Find 3-5 complex idioms or difficult words matching a ${proficiency} student in this text:`, 'CROSS_LINGUAL')}>
-                    <div className="tool-card-title">Cross-Lingual Decoder</div>
-                    <div className="tool-card-desc">Literal, synonym, & Korean equivalents.</div>
-                  </div>
-
-                  <div className="tool-card" style={{borderColor: '#8b5cf6'}} onClick={() => openTool('Peer-Review Engine', 'Generate Glows and Grows.', 'Output JSON strictly formatted as: { "glows": ["...","..."], "grows": ["...","..."] }. Evaluate this draft paragraph specifically considering the student\'s recent error history:', 'PEER')}>
-                    <div className="tool-card-title">Peer-Review Sandbox</div>
-                    <div className="tool-card-desc">Compare draft against rubric & error history.</div>
-                  </div>
-
-                  <div className="tool-card" style={{borderColor: '#8b5cf6'}} onClick={() => openTool('Quiz Generator', 'Dynamic multi-format quiz.', `Output JSON strictly formatted as: { "quiz": { "mcq": [{"question": "...", "answer": "..."}], "cloze": [{"question": "...", "answer": "..."}], "open": [{"question": "..."}] } }. Generate 2 MCQ, 2 Cloze, and 1 Open-ended question for a ${proficiency} student based on this text:`, 'QUIZ')}>
-                    <div className="tool-card-title">Dynamic Quiz</div>
-                    <div className="tool-card-desc">MCQ, Cloze, and Open-ended questions.</div>
-                  </div>
-
-                  <div className="tool-card" style={{borderColor: '#3b82f6'}} onClick={() => openTool('Summary Synthesizer', 'Synthesize tiered summaries.', 'Output JSON strictly formatted as: { "tiers": { "beginner": "Cloze format summary...", "intermediate": "Sentence starter framework...", "advanced": "Inquiry outline format..." } }. Summarize this text:', 'SUMMARY')}>
-                    <div className="tool-card-title">Summary Synthesizer</div>
-                    <div className="tool-card-desc">Tiered scaffolding for summarizing.</div>
-                  </div>
-
-                  <div className="tool-card" style={{borderColor: 'var(--accent-red)'}} onClick={() => openTool('Error Correction Logger', 'Track student errors.', 'You are an error correction logger. Review these student errors, categorize them, and output concise teacher feedback.')}>
-                    <div className="tool-card-title">Error Logger</div>
-                    <div className="tool-card-desc">Track errors. Feeds into AI memory!</div>
-                  </div>
+                  {ALL_AI_TOOLS.filter(t => favoriteTools.includes(t.id)).map(tool => (
+                    <div key={tool.id} className="tool-card" style={{borderColor: tool.color}} onClick={() => openTool(tool)}>
+                      <div className="tool-card-title">{tool.title}</div>
+                      <div className="tool-card-desc">{tool.desc}</div>
+                    </div>
+                  ))}
+                  {favoriteTools.length === 0 && (
+                    <p style={{color: 'var(--text-muted)', fontSize: '0.85rem', gridColumn: '1 / -1'}}>No favorite tools. Click the icon above to manage toolbox.</p>
+                  )}
                 </div>
 
                 <hr style={{borderColor: 'var(--border-color)', margin: '32px 0', borderStyle: 'solid'}}/>
