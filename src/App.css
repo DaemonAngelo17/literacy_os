@@ -17,6 +17,7 @@
   flex-direction: column;
   flex-shrink: 0;
   z-index: 10;
+  overflow-y: auto;
   transition: background-color 0.3s, border-color 0.3s;
 }
 
@@ -297,8 +298,11 @@
   flex: 1;
   display: flex;
   flex-direction: column;
-  overflow-y: auto;
+  overflow: hidden;
   position: relative;
+  min-height: 0;
+  min-width: 0;
+  height: 100%;
 }
 
 .main-header {
@@ -306,6 +310,7 @@
   display: flex;
   justify-content: space-between;
   align-items: flex-start;
+  flex-shrink: 0;
 }
 
 .header-left {
@@ -1148,27 +1153,34 @@
 
 /* ── SPLIT SCREEN WORKSPACE ── */
 .workspace-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
+  display: flex;
+  flex-direction: row;
   gap: 32px;
-  padding: 0 60px 60px;
-  height: calc(100vh - 200px);
+  padding: 0 60px;
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
 }
 
 .workspace-left {
+  flex: 1;
   display: flex;
   flex-direction: column;
-  height: 100%;
   border-right: 1px solid var(--border-color);
   padding-right: 32px;
+  overflow-y: auto;
+  padding-bottom: 4rem;
+  min-height: 0;
+  min-width: 0;
 }
 
 .workspace-right {
+  flex: 1;
   overflow-y: auto;
-  height: 100%;
-  padding-right: 16px;
-  padding-bottom: 60px;
+  padding-right: 8px;
+  padding-bottom: 4rem;
+  min-height: 0;
+  min-width: 0;
 }
 
 .tool-hub-grid {

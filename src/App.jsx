@@ -77,14 +77,21 @@ export default function App() {
   
   const [vocabList, setVocabList] = useLocalStorageState(`${sessionKey}_vocab_list`, []);
   const [vocabVisibility, setVocabVisibility] = useLocalStorageState(`${sessionKey}_vocab_vis`, { showPos: true, showDefinition: true, showKorean: true, showAssociation: true });
-  const [vocabWordCount, setVocabWordCount] = useLocalStorageState(`${sessionKey}_vocab_count`, 15);
+  const [vocabWordCount, setVocabWordCount] = useLocalStorageState(`${sessionKey}_vocab_count`, 10);
   const [seedWords, setSeedWords] = useLocalStorageState(`${sessionKey}_seed_words`, '');
   const [sessionNotes, setSessionNotes] = useLocalStorageState(`${sessionKey}_notes`, '');
   const [learningMatrix, setLearningMatrix] = useLocalStorageState(`${sessionKey}_matrix`, null);
+  const [prevDailyReport, setPrevDailyReport] = useLocalStorageState(`${sessionKey}_prev_report`, '');
+  const [studentReport, setStudentReport] = useLocalStorageState(`${sessionKey}_student_report`, '');
+  const [previousLessonContext, setPreviousLessonContext] = useLocalStorageState(`${sessionKey}_prev_lesson`, '');
+  const [studentProfileContext, setStudentProfileContext] = useLocalStorageState(`${sessionKey}_student_profile`, '');
+  const [isPrevLessonLoaded, setIsPrevLessonLoaded] = useState(false);
+  const [isStudentProfileLoaded, setIsStudentProfileLoaded] = useState(false);
   
-  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isLoadingVocab, setIsLoadingVocab] = useState(false);
   const [isLoadingMatrix, setIsLoadingMatrix] = useState(false);
+  const [showVocabSettings, setShowVocabSettings] = useState(false);
+  const [showVocabModal, setShowVocabModal] = useState(false);
   const [activeMatrixTab, setActiveMatrixTab] = useState('type1');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   
@@ -171,6 +178,12 @@ export default function App() {
     setLearningMatrix(null);
     setMatrixOverrideJson('');
     setMatrixOverrideError('');
+    setPrevDailyReport('');
+    setStudentReport('');
+    setPreviousLessonContext('');
+    setIsPrevLessonLoaded(false);
+    setStudentProfileContext('');
+    setIsStudentProfileLoaded(false);
   };
 
   const handleTextSelection = () => {
@@ -198,6 +211,44 @@ export default function App() {
   }, []);
   const { getRootProps, getInputProps, isDragActive, open: openDropzone } = useDropzone({ onDrop, noClick: true, noKeyboard: true });
 
+  // History dropzones for center panel
+  const onDropPrevLesson = useCallback((acceptedFiles) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+    setIsPrevLessonLoaded(false);
+    if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setPreviousLessonContext(reader.result);
+        setIsPrevLessonLoaded(true);
+      };
+      reader.readAsText(file);
+    } else {
+      setPreviousLessonContext(`[Previous Lesson document: ${file.name} — paste its text content below for AI context]`);
+      setIsPrevLessonLoaded(true);
+    }
+  }, [setPreviousLessonContext]);
+  const { getRootProps: getPrevLessonRootProps, getInputProps: getPrevLessonInputProps, isDragActive: isPrevLessonDragActive, open: openPrevLessonDropzone } = useDropzone({ onDrop: onDropPrevLesson, noClick: true, noKeyboard: true, accept: { 'text/*': [], 'application/pdf': [], 'application/msword': [], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [] } });
+
+  const onDropStudentProfile = useCallback((acceptedFiles) => {
+    const file = acceptedFiles[0];
+    if (!file) return;
+    setIsStudentProfileLoaded(false);
+    if (file.type.startsWith('text/') || file.name.endsWith('.txt') || file.name.endsWith('.md')) {
+      const reader = new FileReader();
+      reader.onload = () => {
+        setStudentProfileContext(reader.result);
+        setIsStudentProfileLoaded(true);
+      };
+      reader.readAsText(file);
+    } else {
+      setStudentProfileContext(`[Student Profile document: ${file.name} — paste its text content below for AI context]`);
+      setIsStudentProfileLoaded(true);
+    }
+  }, [setStudentProfileContext]);
+  const { getRootProps: getStudentProfileRootProps, getInputProps: getStudentProfileInputProps, isDragActive: isStudentProfileDragActive, open: openStudentProfileDropzone } = useDropzone({ onDrop: onDropStudentProfile, noClick: true, noKeyboard: true, accept: { 'text/*': [], 'application/pdf': [], 'application/msword': [], 'application/vnd.openxmlformats-officedocument.wordprocessingml.document': [] } });
+
+
   const handleGenerateVocab = async () => {
     const apiKey = decryptData(encryptedApiKey);
     if (!apiKey) { alert("Please configure AI API KEY in App Settings first."); return; }
@@ -213,7 +264,7 @@ export default function App() {
       prompt = `Output ONLY a raw JSON array. No markdown, no conversational text. Extract exactly ${vocabWordCount} high-value academic vocabulary words from this text in this format: [{ "word": "example", "pos": "noun", "definition": "A representative form or pattern.", "koreanTranslation": "예시", "wordAssociation": "model, sample" }]. Text:`;
     }
     
-    const result = await executeQuery(apiKey, prompt, material || 'No specific material', false, null);
+    const result = await executeQuery(apiKey, prompt, material || 'No specific material', false, null, previousLessonContext, studentProfileContext);
     setIsLoadingVocab(false);
 
     if (result) {
@@ -243,6 +294,8 @@ STUDENT PROFILE: ${studentName}
 GRADE BAND: ${grade}
 CEFR PROFICIENCY: ${proficiency}
 SOURCE MATERIAL: ${material || 'None'}
+${prevDailyReport ? `PREVIOUS DAILY REPORT CONTEXT: ${prevDailyReport}` : ''}
+${studentReport ? `STUDENT STRENGTHS & WEAKNESSES: ${studentReport}` : ''}
 
 STRICT OUTPUT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include introductory conversations, concluding text, or markdown code-fences (such as \`\`\`json). The output must be immediately parseable by JSON.parse().
 
@@ -263,7 +316,7 @@ REQUIRED SCHEMATIC FORMAT:
   }
 }`;
 
-    const result = await executeQuery(apiKey, prompt, '', false, null);
+    const result = await executeQuery(apiKey, prompt, '', false, null, previousLessonContext, studentProfileContext);
     setIsLoadingMatrix(false);
 
     if (result) {
@@ -284,6 +337,8 @@ STUDENT PROFILE: ${studentName}
 GRADE BAND: ${grade}
 CEFR PROFICIENCY: ${proficiency}
 SOURCE MATERIAL: ${material || 'None'}
+${prevDailyReport ? `PREVIOUS DAILY REPORT CONTEXT: ${prevDailyReport}` : ''}
+${studentReport ? `STUDENT STRENGTHS & WEAKNESSES: ${studentReport}` : ''}
 
 STRICT OUTPUT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include introductory conversations, concluding text, or markdown code-fences (such as \`\`\`json). The output must be immediately parseable by JSON.parse().
 
@@ -382,6 +437,7 @@ PROFICIENCY: ${proficiency}
 TARGET SKILLS: ${skillListStr || 'None specified'}
 SOURCE TEXT: ${toolInput || material || 'None'}
 STUDENT'S RECENT ERRORS: ${JSON.stringify(errorMemory)}
+HISTORICAL CONTEXT: ${previousLessonContext ? previousLessonContext : 'None provided.'} | STUDENT PROFILE: ${studentProfileContext ? studentProfileContext : 'None provided.'}. Use this historical data to calibrate difficulty and target recurring weaknesses.
 TASK: ${instruction}
 STRICT FORMATTING RULE: You must format your output EXACTLY according to the following markdown template. Do not include introductory or concluding conversational text. 
 TEMPLATE: ${formatRule}`;
@@ -423,9 +479,9 @@ STRICT FORMATTING RULE: Format this data into a highly organized Markdown docume
 
     setIsGeneratingPlan(true);
     const skillListStr = selectedSkills.map(s => `${s.category} (${s.microSkills.join(', ')})`).join('; ');
-    const prompt = `Output JSON strictly formatted as: { "steps": [ { "num": 1, "title": "...", "duration": "...", "desc": "..." } ] }. Create a highly detailed, 12-step pedagogical lesson plan for a ${grade} student with ${proficiency} proficiency. The class duration is ${duration}. The target skills are: ${skillListStr}. Break down the ${duration} total time across the 12 steps, detailing exactly how many minutes each step should take in the 'duration' field. The 'desc' must be a detailed, minute-by-minute guide. ${material ? 'The reading material is: ' + material : 'Provide a generalized lesson flow for these skills without specific reading material.'}`;
+    const prompt = `Output JSON strictly formatted as: { "steps": [ { "num": 1, "title": "...", "duration": "...", "desc": "..." } ] }. Create a highly detailed, 12-step pedagogical lesson plan for a ${grade} student with ${proficiency} proficiency. The class duration is ${duration}. The target skills are: ${skillListStr}. ${prevDailyReport ? '\\nPREVIOUS DAILY REPORT CONTEXT: ' + prevDailyReport : ''} ${studentReport ? '\\nSTUDENT STRENGTHS & WEAKNESSES: ' + studentReport : ''} Break down the ${duration} total time across the 12 steps, detailing exactly how many minutes each step should take in the 'duration' field. The 'desc' must be a detailed, minute-by-minute guide. ${material ? 'The reading material is: ' + material : 'Provide a generalized lesson flow for these skills without specific reading material.'}`;
     
-    const result = await executeQuery(apiKey, prompt, material || 'No specific material', false, selectedSkills);
+    const result = await executeQuery(apiKey, prompt, material || 'No specific material', false, selectedSkills, previousLessonContext, studentProfileContext);
     setIsGeneratingPlan(false);
 
     if (result) {
@@ -451,6 +507,8 @@ STUDENT PROFILE: ${studentName}
 GRADE LEVEL: ${grade}
 TARGET SKILLS: ${skillListStr || 'None specified'}
 SOURCE TEXT: ${material || 'None'}
+${prevDailyReport ? `PREVIOUS DAILY REPORT CONTEXT: ${prevDailyReport}` : ''}
+${studentReport ? `STUDENT STRENGTHS & WEAKNESSES: ${studentReport}` : ''}
 
 STRICT FORMATTING RULE: You must output ONLY a raw, valid JSON array. Do not include markdown formatting, conversational text, or code blocks (like \`\`\`json). I will be piping this directly into an application parser. 
 The JSON must be an array of exactly 12 objects. Each object must represent the standard LiteracyOS phases: 
@@ -553,7 +611,7 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
     if (!toolInput.trim()) return;
     
     let isErrorLogger = activeTool.title.includes("Error Correction");
-    const result = await executeQuery(apiKey, activeTool.promptPrefix, toolInput, isErrorLogger, selectedSkills);
+    const result = await executeQuery(apiKey, activeTool.promptPrefix, toolInput, isErrorLogger, selectedSkills, previousLessonContext, studentProfileContext);
     if (result) {
       setToolOutput(result);
     } else {
@@ -689,6 +747,80 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
   const progressPercentage = totalSteps === 0 ? 0 : (completedSteps / totalSteps) * 100;
   const strokeDashoffset = (2 * Math.PI * 24) - (progressPercentage / 100) * (2 * Math.PI * 24);
 
+  // ── VOCAB CONFIG MODAL ──────────────────────────────────────────────────────
+  const VocabConfigModal = () => (
+    <div 
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
+        display: 'flex', alignItems: 'center', justifyContent: 'center'
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) setShowVocabModal(false);
+      }}
+    >
+      <div style={{
+        background: 'var(--panel-bg)', border: '1px solid var(--border-color)',
+        borderRadius: '16px', padding: '32px', width: '420px', maxWidth: '90vw',
+        boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
+      }}>
+        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px'}}>
+          <div>
+            <div style={{color:'var(--accent-red)', fontSize:'0.7rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>VOCAB CONFIGURATION</div>
+            <h2 style={{fontFamily:'var(--font-head)', fontSize:'1.4rem', margin:0}}>Configure &amp; Generate</h2>
+          </div>
+          <button className="icon-btn" onClick={() => setShowVocabModal(false)}><X size={20}/></button>
+        </div>
+
+        <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+          <div>
+            <label style={{fontSize:'0.8rem', color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px', display:'block', marginBottom:'8px'}}>Word Count</label>
+            <input
+              type="number"
+              className="custom-input"
+              style={{width:'100%', fontSize:'1rem', padding:'10px 14px'}}
+              value={vocabWordCount}
+              onChange={e => setVocabWordCount(e.target.value)}
+              min="1" max="50"
+              placeholder="e.g. 15"
+            />
+            <p style={{fontSize:'0.75rem', color:'var(--text-muted)', marginTop:'6px'}}>How many vocabulary words should be extracted from the material.</p>
+          </div>
+
+          <div>
+            <label style={{fontSize:'0.8rem', color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px', display:'block', marginBottom:'8px'}}>Mandatory Seed Words</label>
+            <textarea
+              className="custom-input custom-scrollbar"
+              style={{width:'100%', minHeight:'80px', resize:'vertical', fontSize:'0.9rem', padding:'10px 14px'}}
+              placeholder="e.g. photosynthesis, ecosystem, biodiversity..."
+              value={seedWords}
+              onChange={e => setSeedWords(e.target.value)}
+            />
+            <p style={{fontSize:'0.75rem', color:'var(--text-muted)', marginTop:'6px'}}>Comma-separated words the AI <em>must</em> include regardless of the text.</p>
+          </div>
+        </div>
+
+        <div style={{display:'flex', gap:'12px', marginTop:'28px'}}>
+          <button
+            className="btn-primary"
+            style={{flex:1, padding:'12px'}}
+            onClick={() => { setShowVocabModal(false); handleGenerateVocab(); }}
+            disabled={isLoadingVocab || !material}
+          >
+            {isLoadingVocab ? 'Generating...' : '✦ Confirm & Generate'}
+          </button>
+          <button
+            className="icon-btn"
+            style={{padding:'12px 20px', border:'1px solid var(--border-color)'}}
+            onClick={() => setShowVocabModal(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
   return (
     <div className={`app-layout ${isDarkMode ? '' : 'light-theme'}`}>
       
@@ -819,6 +951,9 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
         </div>
       )}
 
+      {/* ── VOCAB CONFIG MODAL ── */}
+      {showVocabModal && <VocabConfigModal />}
+
       {/* ── SIDEBAR ── */}
       <aside className="app-sidebar" style={{overflowY: 'auto'}}>
         <div className="sidebar-logo">
@@ -869,6 +1004,8 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                 </div>
               </div>
 
+
+
               <div className="dropdown-group">
                 <label className="dropdown-label">ADMIN: GRADE LEVEL</label>
                 <div className="custom-select-wrapper">
@@ -897,30 +1034,69 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
               </div>
 
               <div className="dropdown-group">
-                <label className="dropdown-label">ADMIN: VOCAB SETTINGS</label>
-                <div style={{display: 'flex', gap: '8px', flexDirection: 'column'}}>
-                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                    <span style={{fontSize: '0.75rem', color: 'var(--text-muted)'}}>Word Count:</span>
-                    <input 
-                      type="number" 
-                      className="custom-input" 
-                      style={{width: '70px', padding: '6px', fontSize: '0.85rem'}} 
-                      value={vocabWordCount} 
-                      onChange={e => setVocabWordCount(e.target.value)} 
-                      min="1"
-                      max="50"
-                    />
+                <label className="dropdown-label">ADMIN: PREVIOUS DAILY REPORT</label>
+                <textarea 
+                  className="custom-input custom-scrollbar" 
+                  placeholder="Paste previous report..."
+                  value={prevDailyReport}
+                  onChange={e => setPrevDailyReport(e.target.value)}
+                  style={{fontSize: '0.75rem', width: '100%', minHeight: '60px', resize: 'vertical'}}
+                />
+              </div>
+
+              <div className="dropdown-group">
+                <label className="dropdown-label">ADMIN: STUDENT REPORT (STRENGTHS)</label>
+                <textarea 
+                  className="custom-input custom-scrollbar" 
+                  placeholder="Paste general student report..."
+                  value={studentReport}
+                  onChange={e => setStudentReport(e.target.value)}
+                  style={{fontSize: '0.75rem', width: '100%', minHeight: '60px', resize: 'vertical', marginBottom: '16px'}}
+                />
+              </div>
+
+              {/* HISTORICAL CONTEXT HUB */}
+              <div style={{display: 'flex', flexDirection: 'column', gap: '12px', padding: '0 0 24px 0', borderBottom: '1px solid var(--border-color)', marginBottom: '24px'}}>
+                <label className="dropdown-label" style={{marginBottom: '4px'}}>ADMIN: HISTORICAL CONTEXT UPLOADS</label>
+                <div style={{display: 'flex', flexDirection: 'column'}}>
+                  <label style={{fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase'}}>
+                    Previous Daily Report
+                    {isPrevLessonLoaded && <span style={{marginLeft: '6px', color: '#4ade80'}}>✓</span>}
+                  </label>
+                  <div
+                    {...getPrevLessonRootProps()}
+                    onClick={openPrevLessonDropzone}
+                    style={{
+                      border: isPrevLessonDragActive ? '2px dashed #4ade80' : '2px dashed var(--border-color)',
+                      borderRadius: '6px', padding: '12px', textAlign: 'center', cursor: 'pointer',
+                      backgroundColor: isPrevLessonDragActive ? 'rgba(74,222,128,0.08)' : 'var(--panel-bg)',
+                      transition: 'all 0.2s ease', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+                    }}
+                  >
+                    <input {...getPrevLessonInputProps()} />
+                    <FileText size={16} style={{color: isPrevLessonLoaded ? '#4ade80' : 'var(--text-muted)', marginBottom: '4px'}} />
+                    <span style={{fontSize: '0.65rem', color: 'var(--text-muted)'}}>Drop past Daily Report (PDF/Doc)</span>
                   </div>
-                  <div>
-                    <span style={{fontSize: '0.75rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px'}}>Mandatory Words (comma-separated):</span>
-                    <input 
-                      type="text" 
-                      className="custom-input" 
-                      style={{width: '100%', padding: '6px', fontSize: '0.85rem'}}
-                      placeholder="e.g. apple, tree..." 
-                      value={seedWords} 
-                      onChange={e => setSeedWords(e.target.value)} 
-                    />
+                </div>
+
+                <div style={{display: 'flex', flexDirection: 'column'}}>
+                  <label style={{fontSize: '0.7rem', fontWeight: 600, color: 'var(--text-muted)', marginBottom: '4px', textTransform: 'uppercase'}}>
+                    General Student Report
+                    {isStudentProfileLoaded && <span style={{marginLeft: '6px', color: '#4ade80'}}>✓</span>}
+                  </label>
+                  <div
+                    {...getStudentProfileRootProps()}
+                    onClick={openStudentProfileDropzone}
+                    style={{
+                      border: isStudentProfileDragActive ? '2px dashed #4ade80' : '2px dashed var(--border-color)',
+                      borderRadius: '6px', padding: '12px', textAlign: 'center', cursor: 'pointer',
+                      backgroundColor: isStudentProfileDragActive ? 'rgba(74,222,128,0.08)' : 'var(--panel-bg)',
+                      transition: 'all 0.2s ease', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center'
+                    }}
+                  >
+                    <input {...getStudentProfileInputProps()} />
+                    <BookOpen size={16} style={{color: isStudentProfileLoaded ? '#4ade80' : 'var(--text-muted)', marginBottom: '4px'}} />
+                    <span style={{fontSize: '0.65rem', color: 'var(--text-muted)'}}>Drop General Report (PDF/Doc)</span>
                   </div>
                 </div>
               </div>
@@ -1044,7 +1220,7 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
             <div className="header-breadcrumbs">READING TO WRITING - {gradeLabel}</div>
             <h1 className="header-title">Live Workspace</h1>
             <div className="header-tags" style={{marginTop: '12px'}}>
-              <div className="tag">Student <strong>{studentName}</strong></div>
+              <div className="tag">Student <strong>{studentName}</strong>{(isPrevLessonLoaded || isStudentProfileLoaded) && <span style={{marginLeft:'6px',fontSize:'0.65rem',color:'#4ade80',fontWeight:700}}>📚 History</span>}</div>
               {!isStudentView && (
                 <>
                   <div className="tag">Time <strong>{duration}</strong></div>
@@ -1081,6 +1257,8 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
               <div className="seq-kicker">LIVE TEXT</div>
               <h3 className="seq-title" style={{marginBottom: '16px'}}>Reading Material</h3>
             </div>
+
+
             {!isGenerated ? (
               <div {...getRootProps()} style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px', border: isDragActive ? '2px dashed var(--accent-red)' : '1px solid transparent', backgroundColor: isDragActive ? 'var(--bg-hover)' : 'transparent', transition: 'all 0.2s ease', padding: isDragActive ? '16px' : '0', borderRadius: '8px'}}>
                 <input {...getInputProps()} />
@@ -1120,7 +1298,7 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
             {/* VOCABULARY SECTION */}
             {(isGenerated && !isStudentView) || (isStudentView && vocabList.length > 0) ? (
               <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flex: 1}}>
-                <div className="sequence-header" style={{marginBottom: '16px'}}>
+                <div className="sequence-header" style={{marginBottom: '16px', alignItems: 'flex-start'}}>
                   <div>
                     <div className="seq-kicker">VOCABULARY</div>
                     <h3 className="seq-title" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
@@ -1137,12 +1315,17 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                       )}
                     </h3>
                   </div>
+
                   {!isStudentView && !showVocabOverride && (
-                    <div style={{display: 'flex', gap: '8px', alignItems: 'center'}}>
-                      <button className="btn-primary" onClick={handleGenerateVocab} disabled={isLoadingVocab || !material} style={{padding: '6px 12px', fontSize: '0.75rem'}}>
-                        {isLoadingVocab ? 'GENERATING...' : 'Generate Vocab'}
-                      </button>
-                    </div>
+                    <button
+                      className="btn-primary"
+                      onClick={() => setShowVocabModal(true)}
+                      disabled={!material}
+                      style={{padding: '8px 16px', fontSize: '0.8rem', whiteSpace: 'nowrap', display: 'flex', alignItems: 'center', gap: '6px'}}
+                    >
+                      <Settings size={14} />
+                      {isLoadingVocab ? 'Generating...' : 'Configure & Generate Vocab'}
+                    </button>
                   )}
                 </div>
 
@@ -1220,10 +1403,12 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                 {learningMatrix ? renderMatrix() : <p style={{color: 'var(--text-muted)'}}>No learning matrix generated yet.</p>}
               </div>
             )}
+          {/* column spacer so scrollbar can reach past last element */}
+          <div style={{height:'6rem', flexShrink:0}} aria-hidden="true" />
           </div>
 
           {/* RIGHT COLUMN: TOOLS & FLOW */}
-          <div className="workspace-right">
+          <div className="workspace-right" style={{ display: isStudentView ? 'none' : 'block' }}>
             
             {/* AI TOOL HUB */}
             {!isStudentView && (
@@ -1386,6 +1571,8 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
               </>
             )}
 
+            {/* right-column spacer so scrollbar reaches past the Download button */}
+            <div style={{height:'6rem', flexShrink:0}} aria-hidden="true" />
           </div>
         </div>
 

@@ -39,7 +39,7 @@ export function useGeminiQuery() {
     }
   };
 
-  const executeQuery = async (apiKey, promptPrefix, material, isErrorLogger = false, targetedSkills = null) => {
+  const executeQuery = async (apiKey, promptPrefix, material, isErrorLogger = false, targetedSkills = null, previousLessonContext = '', studentProfileContext = '') => {
     setIsLoading(true);
     setError(null);
     try {
@@ -47,8 +47,12 @@ export function useGeminiQuery() {
         ? `\n\nThe teacher has specifically targeted the following ELA skills for this material: ${JSON.stringify(targetedSkills)}. You MUST align your generated content, questions, activities, and rubrics strictly to these targeted skills and micro-skills.`
         : "";
 
+      const historyInstruction = (previousLessonContext || studentProfileContext)
+        ? `\n\nHISTORICAL CONTEXT: ${previousLessonContext ? previousLessonContext : 'None provided.'} | STUDENT PROFILE: ${studentProfileContext ? studentProfileContext : 'None provided.'}. Use this historical data to calibrate difficulty and target recurring weaknesses.`
+        : "";
+
       const systemInstruction = "You are Reading to Writing AI. " + 
-        (errorMemory.length > 0 && !isErrorLogger ? `Student's Recent Errors context: ${JSON.stringify(errorMemory)}` : "") + skillInstruction;
+        (errorMemory.length > 0 && !isErrorLogger ? `Student's Recent Errors context: ${JSON.stringify(errorMemory)}` : "") + skillInstruction + historyInstruction;
       
       const payload = {
         contents: [
