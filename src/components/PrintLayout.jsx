@@ -1,13 +1,13 @@
 import React, { forwardRef } from 'react';
 
-const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duration, skills, material, checkedSteps, scores, activities, errors, sessionNotes, vocabList, vocabVisibility }, ref) => {
+const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficiency, duration, skills, material, roadmapText, learningMatrix, aiFinalFeedback, scores, activities, errors, sessionNotes, vocabList, vocabVisibility }, ref) => {
   return (
     <div ref={ref} className="print-layout">
       <div className="print-header">
         <h1>Reading to Writing Daily Report</h1>
         <div className="print-meta">
           <div><strong>Student:</strong> {studentName}</div>
-          <div><strong>Date:</strong> {date}</div>
+          <div><strong>Date:</strong> {date}{timeRange ? ` (${timeRange})` : ''}</div>
           <div><strong>Level:</strong> {grade} - {proficiency}</div>
           <div><strong>Duration:</strong> {duration}</div>
           <div><strong>Target Skills:</strong> {skills.join(', ')}</div>
@@ -20,11 +20,46 @@ const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duratio
       </div>
 
       <div className="print-section">
-        <h2>Completed Class Flow Steps</h2>
-        <ul className="print-list">
-          {checkedSteps.length > 0 ? checkedSteps.map((step, i) => <li key={i}>{step}</li>) : <li>No steps completed.</li>}
-        </ul>
+        <h2>Class Flow & Roadmap</h2>
+        <div className="print-roadmap-text" style={{whiteSpace: 'pre-wrap', fontSize: '0.85rem', lineHeight: '1.4'}}>
+          {roadmapText || "No roadmap defined."}
+        </div>
       </div>
+
+      {learningMatrix && learningMatrix.columns && (
+        <div className="print-section" style={{pageBreakInside: 'avoid'}}>
+          <h2>Deep Learning Matrix</h2>
+          <table className="print-table" style={{fontSize: '0.75rem', marginTop: '8px'}}>
+            <thead>
+              <tr>
+                {learningMatrix.columns.map((col, idx) => (
+                  <th key={idx}>{col.header}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {learningMatrix.rows && learningMatrix.rows.map((row, rowIdx) => (
+                <tr key={rowIdx}>
+                  {learningMatrix.columns.map((col, colIdx) => {
+                    const cellData = row[col.id] || '';
+                    return (
+                      <td key={colIdx} style={{verticalAlign: 'top'}}>
+                        {Array.isArray(cellData) ? (
+                          <ul style={{paddingLeft: '16px', margin: 0}}>
+                            {cellData.map((item, i) => <li key={i}>{item}</li>)}
+                          </ul>
+                        ) : (
+                          cellData
+                        )}
+                      </td>
+                    );
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
       <div className="print-section">
         <h2>Scores & Activities</h2>
@@ -57,6 +92,15 @@ const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duratio
           <blockquote style={{fontStyle: 'italic', borderLeft: '3px solid #ccc', paddingLeft: '12px', color: '#555', margin: '16px 0'}}>
             <p style={{whiteSpace: 'pre-line', margin: 0}}>{sessionNotes}</p>
           </blockquote>
+        </div>
+      )}
+
+      {aiFinalFeedback && (
+        <div className="print-section" style={{pageBreakInside: 'avoid', backgroundColor: 'rgba(74, 222, 128, 0.1)', padding: '16px', borderRadius: '8px', border: '1px solid #4ade80'}}>
+          <h2 style={{color: '#2e7d32'}}>Final Student Feedback</h2>
+          <p style={{whiteSpace: 'pre-wrap', margin: 0, fontSize: '0.9rem', lineHeight: '1.5', color: '#111'}}>
+            {aiFinalFeedback}
+          </p>
         </div>
       )}
 

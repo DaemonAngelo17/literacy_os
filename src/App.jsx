@@ -96,6 +96,12 @@ export default function App() {
   const [activeMatrixTab, setActiveMatrixTab] = useState('type1');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   
+  const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
+  const [classDate, setClassDate] = useState(new Date().toISOString().split('T')[0]);
+  const [classTimeRange, setClassTimeRange] = useState('');
+  const [editableRoadmapText, setEditableRoadmapText] = useState('');
+  const [aiFinalFeedback, setAiFinalFeedback] = useState('');
+  
   // Encrypted API Key
   const [encryptedApiKey, setEncryptedApiKey] = useLocalStorageState('literacy_os_encrypted_api_key', '');
   const [tempApiKeyInput, setTempApiKeyInput] = useState('');
@@ -575,10 +581,18 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
   const handleRemoveActivity = (id) => setActivities(prev => prev.filter(a => a.id !== id));
   const updateActivity = (id, field, value) => setActivities(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
 
-  const handleDownload = async () => {
+  const handleDownload = () => {
+    if (!editableRoadmapText && generatedSteps.length > 0) {
+      setEditableRoadmapText(generatedSteps.map(s => `- ${s}`).join('\n'));
+    }
+    setIsDownloadModalOpen(true);
+  };
+
+  const executeDownload = async () => {
+    setIsDownloadModalOpen(false);
     try {
       const safeName = studentName.replace(/[^a-z0-9]/gi, '_');
-      const dateStr = new Date().toISOString().split('T')[0];
+      const dateStr = classDate || new Date().toISOString().split('T')[0];
       const opt = {
         margin:       0.5,
         filename:     `Reading_to_Writing_Report_${safeName}_${dateStr}.pdf`,
@@ -747,6 +761,130 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
   const totalSteps = activeSteps.length;
   const progressPercentage = totalSteps === 0 ? 0 : (completedSteps / totalSteps) * 100;
   const strokeDashoffset = (2 * Math.PI * 24) - (progressPercentage / 100) * (2 * Math.PI * 24);
+
+  // ── PRE-DOWNLOAD MODAL ──────────────────────────────────────────────────────
+  const DownloadModal = () => {
+    const fallbackDownloadPrompt = `As an expert pedagogical assessor, write a final summary report for the student based on the following class session data.
+
+STUDENT NAME: ${studentName}
+GRADE LEVEL: ${grade}
+PROFICIENCY: ${proficiency}
+CLASS DURATION: ${duration}
+
+TARGET SKILLS:
+${selectedSkills.map(s => `- ${s.category}: ${s.microSkills.join(', ')}`).join('\n')}
+
+SCORES:
+- Main Assignment: ${scores.assignment.acquired || 0}/${scores.assignment.total || 0}
+- Vocab Assignment: ${scores.vocabAssignment.acquired || 0}/${scores.vocabAssignment.total || 0}
+- Vocab Quiz: ${scores.vocabQuiz.acquired || 0}/${scores.vocabQuiz.total || 0}
+${activities.filter(a => a.title).map(a => `- ${a.title}: ${a.acquired || 0}/${a.total || 0}`).join('\n')}
+
+TEACHER'S INTERNAL NOTES:
+${sessionNotes || 'None'}
+
+LOGGED ERRORS (AI generation failures to account for):
+${errorMemory.length > 0 ? errorMemory.map(e => `- ${e.toolName} Failed: ${e.input}`).join('\n') : 'None'}
+
+Please format your final feedback clearly with a summary of their performance, areas of strength, areas for improvement, and recommended next steps. Output only the final feedback text without markdown conversational filler.`;
+
+    return (
+      <div 
+        style={{
+          position: 'fixed', inset: 0, zIndex: 9999,
+          backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center'
+        }}
+      >
+        <div style={{
+          background: 'var(--bg-main)', border: '1px solid var(--border-color)',
+          borderRadius: '16px', padding: '32px', width: '800px', maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto',
+          boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
+        }} className="custom-scrollbar">
+          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px'}}>
+            <div>
+              <div style={{color:'var(--accent-red)', fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>FINAL STEP</div>
+              <h2 style={{fontFamily:'var(--font-head)', fontSize:'1.6rem', margin:0}}>Configure &amp; Download Report</h2>
+            </div>
+            <button className="icon-btn" onClick={() => setIsDownloadModalOpen(false)}><X size={24}/></button>
+          </div>
+
+          <div style={{display:'grid', gridTemplateColumns: '1fr 1fr', gap: '24px', marginBottom: '24px'}}>
+            <div>
+              <label className="dropdown-label">CLASS DATE</label>
+              <input type="date" className="custom-input" value={classDate} onChange={e => setClassDate(e.target.value)} style={{width: '100%'}} />
+            </div>
+            <div>
+              <label className="dropdown-label">TIME RANGE</label>
+              <input type="text" className="custom-input" placeholder="e.g., 10:00 AM - 11:30 AM" value={classTimeRange} onChange={e => setClassTimeRange(e.target.value)} style={{width: '100%'}} />
+            </div>
+          </div>
+
+          <div style={{marginBottom: '24px'}}>
+            <label className="dropdown-label">EDITABLE 12-STEP ROADMAP (Appears on PDF)</label>
+            <textarea 
+              className="custom-input custom-scrollbar" 
+              value={editableRoadmapText} 
+              onChange={e => setEditableRoadmapText(e.target.value)} 
+              style={{width: '100%', minHeight: '150px', fontSize: '0.85rem'}}
+            />
+          </div>
+
+          <div style={{marginBottom: '24px'}}>
+            <label className="dropdown-label">TEACHER'S SESSION NOTES (Included in Prompt below)</label>
+            <textarea 
+              className="custom-input custom-scrollbar" 
+              value={sessionNotes} 
+              onChange={e => setSessionNotes(e.target.value)} 
+              placeholder="Any qualitative observations to feed the AI for the final summary..."
+              style={{width: '100%', minHeight: '80px', fontSize: '0.85rem'}}
+            />
+          </div>
+
+          <div style={{border: '1px dashed var(--accent-red)', padding: '16px', borderRadius: '8px', marginBottom: '24px', backgroundColor: 'var(--panel-bg)'}}>
+            <h4 style={{color: 'var(--accent-red)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px'}}><AlertCircle size={16}/> AI Override Fallback</h4>
+            <p style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px'}}>If the internal AI is failing to generate a final summary, copy this prompt to ChatGPT/Claude to generate the final student feedback.</p>
+            
+            <div style={{position: 'relative', marginBottom: '16px'}}>
+              <textarea 
+                className="custom-input custom-scrollbar" 
+                readOnly 
+                value={fallbackDownloadPrompt} 
+                style={{width: '100%', minHeight: '100px', fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', backgroundColor: 'var(--bg-main)'}}
+              />
+              <button 
+                className="icon-btn" 
+                onClick={() => navigator.clipboard.writeText(fallbackDownloadPrompt)} 
+                style={{position: 'absolute', top: '8px', right: '8px', backgroundColor: 'var(--panel-bg)', padding: '6px'}}
+                title="Copy Prompt"
+              >
+                <Check size={14} />
+              </button>
+            </div>
+
+            <label className="dropdown-label">PASTE AI FINAL FEEDBACK HERE (Appears on PDF)</label>
+            <textarea 
+              className="custom-input custom-scrollbar" 
+              value={aiFinalFeedback} 
+              onChange={e => setAiFinalFeedback(e.target.value)} 
+              placeholder="Paste the final generated feedback from the external AI here..."
+              style={{width: '100%', minHeight: '120px', fontSize: '0.85rem'}}
+            />
+          </div>
+
+          <div style={{display:'flex', gap:'12px', marginTop:'28px', borderTop: '1px solid var(--border-color)', paddingTop: '24px'}}>
+            <button
+              className="btn-primary"
+              style={{flex:1, padding:'16px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}
+              onClick={executeDownload}
+            >
+              <Download size={20} /> Generate Final PDF Report
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
 
   // ── VOCAB CONFIG MODAL ──────────────────────────────────────────────────────
   const VocabConfigModal = () => (
@@ -954,6 +1092,7 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
 
       {/* ── VOCAB CONFIG MODAL ── */}
       {showVocabModal && <VocabConfigModal />}
+      {isDownloadModalOpen && <DownloadModal />}
 
       {/* ── SIDEBAR ── */}
       <aside className="app-sidebar" style={{overflowY: 'auto'}}>
@@ -1582,13 +1721,16 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
            <PrintLayout 
              ref={printRef}
              studentName={studentName}
-             date={new Date().toLocaleDateString()}
+             date={classDate || new Date().toLocaleDateString()}
+             timeRange={classTimeRange}
              grade={grade}
              proficiency={proficiency}
              duration={duration}
              skills={selectedSkills.map(s => `${s.category} (${s.microSkills.length})`)}
              material={material}
-             checkedSteps={activeSteps.filter(s => stepStatus[s.num] === 'checked').map(s => `${s.num}. ${s.title}`)}
+             roadmapText={editableRoadmapText}
+             learningMatrix={learningMatrix}
+             aiFinalFeedback={aiFinalFeedback}
              scores={scores}
              activities={activities}
              errors={errorMemory}
