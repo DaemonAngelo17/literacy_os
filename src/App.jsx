@@ -90,6 +90,7 @@ export default function App() {
   
   const [isLoadingVocab, setIsLoadingVocab] = useState(false);
   const [isLoadingMatrix, setIsLoadingMatrix] = useState(false);
+  const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [showVocabSettings, setShowVocabSettings] = useState(false);
   const [showVocabModal, setShowVocabModal] = useState(false);
   const [activeMatrixTab, setActiveMatrixTab] = useState('type1');
