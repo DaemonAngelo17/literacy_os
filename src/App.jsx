@@ -78,9 +78,12 @@ export default function App() {
   const [vocabList, setVocabList] = useLocalStorageState(`${sessionKey}_vocab_list`, []);
   const [vocabVisibility, setVocabVisibility] = useLocalStorageState(`${sessionKey}_vocab_vis`, { showPos: true, showDefinition: true, showKorean: true, showAssociation: true });
   const [sessionNotes, setSessionNotes] = useLocalStorageState(`${sessionKey}_notes`, '');
+  const [learningMatrix, setLearningMatrix] = useLocalStorageState(`${sessionKey}_matrix`, null);
   
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [isLoadingVocab, setIsLoadingVocab] = useState(false);
+  const [isLoadingMatrix, setIsLoadingMatrix] = useState(false);
+  const [activeMatrixTab, setActiveMatrixTab] = useState('type1');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
   
   // Encrypted API Key
@@ -113,6 +116,8 @@ export default function App() {
   const [showVocabOverride, setShowVocabOverride] = useState(false);
   const [vocabOverrideJson, setVocabOverrideJson] = useState('');
   const [vocabOverrideError, setVocabOverrideError] = useState('');
+  const [matrixOverrideJson, setMatrixOverrideJson] = useState('');
+  const [matrixOverrideError, setMatrixOverrideError] = useState('');
 
   const printRef = useRef();
   const { executeQuery, isLoading: isToolLoading, error: toolError } = useGeminiQuery();
@@ -161,6 +166,9 @@ export default function App() {
     setVocabOverrideJson('');
     setVocabOverrideError('');
     setSessionNotes('');
+    setLearningMatrix(null);
+    setMatrixOverrideJson('');
+    setMatrixOverrideError('');
   };
 
   const handleTextSelection = () => {
@@ -213,6 +221,132 @@ export default function App() {
       }
     }
     triggerToolFallback('Vocab Homework Maker', 'Extract up to 42 high-value academic vocabulary words.', 'Raw JSON array exactly like: [{ "word": "example", "pos": "noun", "definition": "...", "koreanTranslation": "...", "wordAssociation": "..." }]');
+  };
+
+  const handleGenerateMatrix = async () => {
+    const apiKey = decryptData(encryptedApiKey);
+    if (!apiKey) { alert("Please configure AI API KEY in App Settings first."); return; }
+    
+    setIsLoadingMatrix(true);
+    setMatrixOverrideError('');
+    const prompt = `Act as an elite ELA Curriculum Designer and Cognition Specialist. 
+STUDENT PROFILE: ${studentName}
+GRADE BAND: ${grade}
+CEFR PROFICIENCY: ${proficiency}
+SOURCE MATERIAL: ${material || 'None'}
+
+STRICT OUTPUT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include introductory conversations, concluding text, or markdown code-fences (such as \`\`\`json). The output must be immediately parseable by JSON.parse().
+
+REQUIRED SCHEMATIC FORMAT:
+{
+  "type1": {
+    "coreIssue": "Identify the foundational problem...",
+    "authorEmotion": "Identify the author's primary and underlying super-emotion...",
+    "prompts": ["Literal question 1...", "Literal question 2..."]
+  },
+  "type2": {
+    "realWorldConnections": "Connect the core text issue to an active real-world societal or environmental issue...",
+    "prompts": ["Analytical tracking prompt 1...", "Analytical tracking prompt 2..."]
+  },
+  "type3": {
+    "scienceBasedApplication": "Synthesize structural textual metrics with objective, scientific or logic-driven inquiry...",
+    "prompts": ["Synthetic evaluation task 1...", "Advanced writing bridge task 2..."]
+  }
+}`;
+
+    const result = await executeQuery(apiKey, prompt, '', false, null);
+    setIsLoadingMatrix(false);
+
+    if (result) {
+      try {
+        const cleaned = result.replace(/```json|```/gi, '').trim();
+        const data = JSON.parse(cleaned);
+        if (data.type1 && data.type2 && data.type3) {
+          setLearningMatrix(data);
+          return;
+        }
+      } catch (e) {
+        console.error("Matrix parsing failed:", e);
+      }
+    }
+    
+    const fallbackPrompt = `Act as an elite ELA Curriculum Designer and Cognition Specialist. My internal parsing engine failed, and I require a standardized Type 1, 2, 3 Deep Learning Matrix built precisely from the metrics below.
+STUDENT PROFILE: ${studentName}
+GRADE BAND: ${grade}
+CEFR PROFICIENCY: ${proficiency}
+SOURCE MATERIAL: ${material || 'None'}
+
+STRICT OUTPUT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include introductory conversations, concluding text, or markdown code-fences (such as \`\`\`json). The output must be immediately parseable by JSON.parse().
+
+REQUIRED SCHEMATIC FORMAT:
+{
+  "type1": {
+    "coreIssue": "Identify the foundational problem...",
+    "authorEmotion": "Identify the author's primary and underlying super-emotion...",
+    "prompts": ["Literal question 1...", "Literal question 2..."]
+  },
+  "type2": {
+    "realWorldConnections": "Connect the core text issue to an active real-world societal or environmental issue...",
+    "prompts": ["Analytical tracking prompt 1...", "Analytical tracking prompt 2..."]
+  },
+  "type3": {
+    "scienceBasedApplication": "Synthesize structural textual metrics with objective, scientific or logic-driven inquiry...",
+    "prompts": ["Synthetic evaluation task 1...", "Advanced writing bridge task 2..."]
+  }
+}`;
+    setFailSafeModal({ isOpen: true, type: 'MATRIX', promptContent: fallbackPrompt });
+  };
+
+  const handleApplyMatrixOverride = () => {
+    setMatrixOverrideError('');
+    try {
+      const cleaned = matrixOverrideJson.replace(/```json|```/gi, '').trim();
+      const parsedData = JSON.parse(cleaned);
+      if (!parsedData.type1 || !parsedData.type2 || !parsedData.type3) {
+        throw new Error("Missing Type 1, 2, or 3 schema keys");
+      }
+      setLearningMatrix(parsedData);
+      setFailSafeModal({ isOpen: false, type: '', promptContent: '' });
+      setMatrixOverrideJson('');
+    } catch (e) {
+      setMatrixOverrideError("Invalid format. Ensure you copied only the exact JSON object output.");
+    }
+  };
+
+  const renderMatrix = () => {
+    if (!learningMatrix) return null;
+    const activeData = learningMatrix[activeMatrixTab];
+    if (!activeData) return null;
+
+    return (
+      <div className="matrix-container" style={{backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '16px'}}>
+        <div className="matrix-tabs" style={{display: 'flex', borderBottom: '1px solid var(--border-color)'}}>
+          <button className={`matrix-tab ${activeMatrixTab === 'type1' ? 'active' : ''}`} onClick={() => setActiveMatrixTab('type1')} style={{flex: 1, padding: '12px', border: 'none', background: activeMatrixTab === 'type1' ? 'var(--bg-hover)' : 'transparent', color: activeMatrixTab === 'type1' ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeMatrixTab === 'type1' ? 'bold' : 'normal', cursor: 'pointer', borderRight: '1px solid var(--border-color)', borderTopLeftRadius: '8px'}}>Type 1</button>
+          <button className={`matrix-tab ${activeMatrixTab === 'type2' ? 'active' : ''}`} onClick={() => setActiveMatrixTab('type2')} style={{flex: 1, padding: '12px', border: 'none', background: activeMatrixTab === 'type2' ? 'var(--bg-hover)' : 'transparent', color: activeMatrixTab === 'type2' ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeMatrixTab === 'type2' ? 'bold' : 'normal', cursor: 'pointer', borderRight: '1px solid var(--border-color)'}}>Type 2</button>
+          <button className={`matrix-tab ${activeMatrixTab === 'type3' ? 'active' : ''}`} onClick={() => setActiveMatrixTab('type3')} style={{flex: 1, padding: '12px', border: 'none', background: activeMatrixTab === 'type3' ? 'var(--bg-hover)' : 'transparent', color: activeMatrixTab === 'type3' ? 'var(--text-main)' : 'var(--text-muted)', fontWeight: activeMatrixTab === 'type3' ? 'bold' : 'normal', cursor: 'pointer', borderTopRightRadius: '8px'}}>Type 3</button>
+        </div>
+        <div className="matrix-content" style={{padding: '16px', fontSize: '0.9rem', lineHeight: '1.6'}}>
+          {activeMatrixTab === 'type1' && (
+            <>
+              <div style={{marginBottom: '12px'}}><strong>Core Issue:</strong> {activeData.coreIssue}</div>
+              <div style={{marginBottom: '12px'}}><strong>Author Emotion:</strong> {activeData.authorEmotion}</div>
+            </>
+          )}
+          {activeMatrixTab === 'type2' && (
+            <div style={{marginBottom: '12px'}}><strong>Real World Connections:</strong> {activeData.realWorldConnections}</div>
+          )}
+          {activeMatrixTab === 'type3' && (
+            <div style={{marginBottom: '12px'}}><strong>Science/Logic Application:</strong> {activeData.scienceBasedApplication}</div>
+          )}
+          <div style={{marginTop: '16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px'}}>
+            <strong style={{color: 'var(--accent-red)'}}>Cognitive Prompts:</strong>
+            <ul style={{paddingLeft: '20px', marginTop: '8px', color: 'var(--text-main)'}}>
+              {Array.isArray(activeData.prompts) ? activeData.prompts.map((p, i) => <li key={i} style={{marginBottom: '8px'}}>{p}</li>) : null}
+            </ul>
+          </div>
+        </div>
+      </div>
+    );
   };
 
   const triggerToolFallback = (toolName, instruction, formatRule) => {
@@ -568,11 +702,28 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                 value={failSafeModal.promptContent}
                 readOnly
               />
-              <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '16px'}}>
+              <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '16px', marginBottom: failSafeModal.type === 'MATRIX' ? '24px' : '0'}}>
                 <button className="btn-primary" onClick={() => navigator.clipboard.writeText(failSafeModal.promptContent)} style={{backgroundColor: 'var(--accent-red)'}}>
                   Copy to Clipboard
                 </button>
               </div>
+
+              {failSafeModal.type === 'MATRIX' && (
+                <div style={{paddingTop: '16px', borderTop: '1px solid var(--border-color)'}}>
+                  <p style={{marginBottom: '8px', fontWeight: 'bold', color: 'var(--text-main)'}}>Paste Extracted Matrix Data</p>
+                  <textarea 
+                    className="custom-input custom-scrollbar" 
+                    style={{minHeight: '200px', resize: 'vertical', fontSize: '0.85rem', fontFamily: 'monospace'}}
+                    placeholder='Paste external LLM matrix JSON here...'
+                    value={matrixOverrideJson}
+                    onChange={e => setMatrixOverrideJson(e.target.value)}
+                  />
+                  {matrixOverrideError && <div style={{color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '8px'}}>{matrixOverrideError}</div>}
+                  <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '12px'}}>
+                    <button className="btn-primary" onClick={handleApplyMatrixOverride}>Incorporate Matrix Data</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -993,6 +1144,27 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                 )}
               </div>
             ) : null}
+
+            {/* DEEP LEARNING MATRIX SECTION */}
+            {(!isStudentView || (isStudentView && learningMatrix)) && isGenerated && (
+              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flex: 1}}>
+                <div className="sequence-header" style={{marginBottom: '16px'}}>
+                  <div>
+                    <div className="seq-kicker">COGNITION & SYNTHESIS</div>
+                    <h3 className="seq-title" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                      Deep-Learning Matrix
+                    </h3>
+                  </div>
+                  {!isStudentView && !learningMatrix && material && (
+                     <button className="btn-primary" onClick={handleGenerateMatrix} disabled={isLoadingMatrix} style={{padding: '6px 12px', fontSize: '0.75rem'}}>
+                        {isLoadingMatrix ? 'GENERATING...' : 'Generate Matrix'}
+                     </button>
+                  )}
+                </div>
+
+                {learningMatrix ? renderMatrix() : <p style={{color: 'var(--text-muted)'}}>No learning matrix generated yet.</p>}
+              </div>
+            )}
           </div>
 
           {/* RIGHT COLUMN: TOOLS & FLOW */}
