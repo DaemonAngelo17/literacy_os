@@ -30,11 +30,11 @@ const PrintLayout = forwardRef(({ studentName, date, grade, proficiency, duratio
         <h2>Scores & Activities</h2>
         <table className="print-table">
           <tbody>
-            <tr><td style={{width: '60%'}}><strong>Assignment Score</strong></td><td>{scores.assignment || '-'}</td></tr>
-            <tr><td><strong>Vocab Assignment Score</strong></td><td>{scores.vocabAssignment || '-'}</td></tr>
-            <tr><td><strong>Vocab Quiz Score</strong></td><td>{scores.vocabQuiz || '-'}</td></tr>
+            <tr><td style={{width: '60%'}}><strong>Assignment Score</strong></td><td>{(!scores.assignment.acquired && !scores.assignment.total) ? '-' : `${scores.assignment.acquired || 0}/${scores.assignment.total || 0} (${Math.round(((scores.assignment.acquired || 0)/(scores.assignment.total || 1))*100)}%)`}</td></tr>
+            <tr><td><strong>Vocab Assignment Score</strong></td><td>{(!scores.vocabAssignment.acquired && !scores.vocabAssignment.total) ? '-' : `${scores.vocabAssignment.acquired || 0}/${scores.vocabAssignment.total || 0} (${Math.round(((scores.vocabAssignment.acquired || 0)/(scores.vocabAssignment.total || 1))*100)}%)`}</td></tr>
+            <tr><td><strong>Vocab Quiz Score</strong></td><td>{(!scores.vocabQuiz.acquired && !scores.vocabQuiz.total) ? '-' : `${scores.vocabQuiz.acquired || 0}/${scores.vocabQuiz.total || 0} (${Math.round(((scores.vocabQuiz.acquired || 0)/(scores.vocabQuiz.total || 1))*100)}%)`}</td></tr>
             {activities.filter(a => a.title).map((a, i) => (
-              <tr key={i}><td><strong>{a.title}</strong></td><td>{a.score}</td></tr>
+              <tr key={i}><td><strong>{a.title}</strong></td><td>{(!a.acquired && !a.total) ? '-' : `${a.acquired || 0}/${a.total || 0} (${Math.round(((a.acquired || 0)/(a.total || 1))*100)}%)`}</td></tr>
             ))}
           </tbody>
         </table>

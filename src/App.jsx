@@ -42,6 +42,7 @@ const ALL_AI_TOOLS = [
   { id: 'peer', title: 'Peer-Review Sandbox', desc: 'Compare draft against rubric & error history.', promptPrefix: () => 'Output JSON strictly formatted as: { "glows": ["...","..."], "grows": ["...","..."] }. Evaluate this draft paragraph specifically considering the student\'s recent error history:', type: 'PEER', color: '#8b5cf6' },
   { id: 'quiz', title: 'Dynamic Quiz', desc: 'MCQ, Cloze, and Open-ended questions.', promptPrefix: (prof) => `Output JSON strictly formatted as: { "quiz": { "mcq": [{"question": "...", "answer": "..."}], "cloze": [{"question": "...", "answer": "..."}], "open": [{"question": "..."}] } }. Generate 2 MCQ, 2 Cloze, and 1 Open-ended question for a ${prof} student based on this text:`, type: 'QUIZ', color: '#8b5cf6' },
   { id: 'summary', title: 'Summary Synthesizer', desc: 'Tiered scaffolding for summarizing.', promptPrefix: () => 'Output JSON strictly formatted as: { "tiers": { "beginner": "Cloze format summary...", "intermediate": "Sentence starter framework...", "advanced": "Inquiry outline format..." } }. Summarize this text:', type: 'SUMMARY', color: '#3b82f6' },
+  { id: 'vocab', title: 'Vocab Homework Maker', desc: 'Extract contextual academic vocabulary.', promptPrefix: () => `Output ONLY a raw JSON array. No markdown, no conversational text. Extract up to 42 high-value academic vocabulary words from this text in this format: [{ "word": "example", "pos": "noun", "definition": "A representative form or pattern.", "koreanTranslation": "예시", "wordAssociation": "model, sample" }]. Text:`, type: 'VOCAB', color: '#10b981' },
   { id: 'error', title: 'Error Logger', desc: 'Track errors. Feeds into AI memory!', promptPrefix: () => 'You are an error correction logger. Review these student errors, categorize them, and output concise teacher feedback.', type: 'GENERIC', color: 'var(--accent-red)' }
 ];
 
@@ -71,8 +72,11 @@ export default function App() {
   const [isGenerated, setIsGenerated] = useLocalStorageState(`${sessionKey}_gen`, false);
   const [generatedSteps, setGeneratedSteps] = useLocalStorageState(`${sessionKey}_gen_steps`, []);
   const [stepStatus, setStepStatus] = useLocalStorageState(`${sessionKey}_steps`, {});
-  const [scores, setScores] = useLocalStorageState(`${sessionKey}_scores`, { assignment: '', vocabAssignment: '', vocabQuiz: '' });
-  const [activities, setActivities] = useLocalStorageState(`${sessionKey}_acts`, [{ id: Date.now(), title: '', score: '' }]);
+  const [scores, setScores] = useLocalStorageState(`${sessionKey}_scores_v2`, { assignment: { acquired: '', total: '' }, vocabAssignment: { acquired: '', total: '' }, vocabQuiz: { acquired: '', total: '' } });
+  const [activities, setActivities] = useLocalStorageState(`${sessionKey}_acts_v2`, [{ id: Date.now(), title: '', acquired: '', total: '' }]);
+  
+  const [vocabList, setVocabList] = useLocalStorageState(`${sessionKey}_vocab_list`, []);
+  const [vocabVisibility, setVocabVisibility] = useLocalStorageState(`${sessionKey}_vocab_vis`, { showPos: true, showDefinition: true, showKorean: true, showAssociation: true });
   
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [showClearConfirm, setShowClearConfirm] = useState(false);
@@ -104,6 +108,9 @@ export default function App() {
   const [showOverrideInput, setShowOverrideInput] = useState(false);
   const [overrideJson, setOverrideJson] = useState('');
   const [overrideError, setOverrideError] = useState('');
+  const [showVocabOverride, setShowVocabOverride] = useState(false);
+  const [vocabOverrideJson, setVocabOverrideJson] = useState('');
+  const [vocabOverrideError, setVocabOverrideError] = useState('');
 
   const printRef = useRef();
   const { executeQuery, isLoading: isToolLoading, error: toolError } = useGeminiQuery();
@@ -138,8 +145,8 @@ export default function App() {
     setIsGenerated(false);
     setGeneratedSteps([]);
     setStepStatus({});
-    setScores({ assignment: '', vocabAssignment: '', vocabQuiz: '' });
-    setActivities([{ id: Date.now(), title: '', score: '' }]);
+    setScores({ assignment: { acquired: '', total: '' }, vocabAssignment: { acquired: '', total: '' }, vocabQuiz: { acquired: '', total: '' } });
+    setActivities([{ id: Date.now(), title: '', acquired: '', total: '' }]);
     setTimerSeconds(0);
     setIsTimerRunning(false);
     setShowClearConfirm(false);
@@ -147,6 +154,10 @@ export default function App() {
     setShowOverrideInput(false);
     setOverrideJson('');
     setOverrideError('');
+    setVocabList([]);
+    setShowVocabOverride(false);
+    setVocabOverrideJson('');
+    setVocabOverrideError('');
   };
 
   const handleTextSelection = () => {
@@ -159,8 +170,24 @@ export default function App() {
   };
 
   const triggerToolFallback = (toolName, instruction, formatRule) => {
-    const skillListStr = selectedSkills.map(s => `${s.category} (${s.microSkills.join(', ')})`).join('; ');
-    const fallbackPrompt = `Act as an expert ELA instructional designer. My automated system failed, and I need you to perform the function of the ${toolName} for my class. 
+    let fallbackPrompt;
+    if (toolName === 'Vocab Homework Maker') {
+      fallbackPrompt = `Act as an expert ESL linguist. My system failed, and I need you to extract up to 42 high-value academic vocabulary words from the text below. 
+SOURCE TEXT: ${toolInput || material || 'None'}
+STRICT FORMATTING RULE: Output ONLY a raw JSON array. No markdown, no conversational text. 
+SCHEMA: 
+[
+  { 
+    "word": "example", 
+    "pos": "noun", 
+    "definition": "A representative form or pattern.", 
+    "koreanTranslation": "예시", 
+    "wordAssociation": "model, sample" 
+  }
+]`;
+    } else {
+      const skillListStr = selectedSkills.map(s => `${s.category} (${s.microSkills.join(', ')})`).join('; ');
+      fallbackPrompt = `Act as an expert ELA instructional designer. My automated system failed, and I need you to perform the function of the ${toolName} for my class. 
 STUDENT PROFILE: ${studentName}
 GRADE LEVEL: ${grade}
 PROFICIENCY: ${proficiency}
@@ -170,6 +197,7 @@ STUDENT'S RECENT ERRORS: ${JSON.stringify(errorMemory)}
 TASK: ${instruction}
 STRICT FORMATTING RULE: You must format your output EXACTLY according to the following markdown template. Do not include introductory or concluding conversational text. 
 TEMPLATE: ${formatRule}`;
+    }
 
     setFailSafeModal({ isOpen: true, type: 'TOOL', promptContent: fallbackPrompt });
   };
@@ -280,9 +308,23 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
     }
   };
 
+  const handleApplyVocabOverride = () => {
+    setVocabOverrideError('');
+    try {
+      const cleaned = vocabOverrideJson.replace(/```json|```/gi, '').trim();
+      const parsedData = JSON.parse(cleaned);
+      if (!Array.isArray(parsedData)) throw new Error("Parsed data is not an array");
+      setVocabList(parsedData);
+      setShowVocabOverride(false);
+      setVocabOverrideJson('');
+    } catch (e) {
+      setVocabOverrideError("Invalid format. Please ensure you copied only the JSON array output.");
+    }
+  };
+
   const toggleSkill = (skill) => setSelectedSkills(prev => prev.includes(skill) ? prev.filter(s => s !== skill) : [...prev, skill]);
   const handleStepAction = (num, action) => setStepStatus(prev => ({ ...prev, [num]: prev[num] === action ? null : action }));
-  const handleAddActivity = () => setActivities(prev => [...prev, { id: Date.now(), title: '', score: '' }]);
+  const handleAddActivity = () => setActivities(prev => [...prev, { id: Date.now(), title: '', acquired: '', total: '' }]);
   const handleRemoveActivity = (id) => setActivities(prev => prev.filter(a => a.id !== id));
   const updateActivity = (id, field, value) => setActivities(prev => prev.map(a => a.id === id ? { ...a, [field]: value } : a));
 
@@ -341,6 +383,16 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
 
     try {
       const rawData = JSON.parse(toolOutput);
+
+      if (toolType === 'VOCAB') {
+        const data = Array.isArray(rawData) ? rawData : (rawData.vocab || rawData.items || []);
+        return (
+          <div className="vocab-output">
+            <button className="btn-primary" onClick={() => { setVocabList(data); setActiveTool(null); }}>Apply to Vocabulary Homework</button>
+            <div className="llm-output-box" style={{marginTop: '12px'}}>{JSON.stringify(data, null, 2)}</div>
+          </div>
+        );
+      }
 
       if (toolType === 'THESIS' && rawData.theses) {
         const data = ThesisSchema.parse(rawData);
@@ -790,11 +842,13 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
 
         <div className="workspace-grid" style={{gridTemplateColumns: isStudentView ? '1fr' : '1fr 1fr'}}>
           {/* LEFT COLUMN: LIVE TEXT */}
-          <div className="workspace-left" style={{borderRight: isStudentView ? 'none' : '1px solid var(--border-color)'}}>
-            <div className="seq-kicker">LIVE TEXT</div>
-            <h3 className="seq-title" style={{marginBottom: '16px'}}>Reading Material</h3>
+          <div className="workspace-left" style={{borderRight: isStudentView ? 'none' : '1px solid var(--border-color)', display: 'flex', flexDirection: 'column'}}>
+            <div>
+              <div className="seq-kicker">LIVE TEXT</div>
+              <h3 className="seq-title" style={{marginBottom: '16px'}}>Reading Material</h3>
+            </div>
             {!isGenerated ? (
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+              <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px'}}>
                 <textarea 
                   className="textarea-gen"
                   placeholder="Paste the reading material here (Optional)..."
@@ -810,13 +864,89 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                 )}
               </div>
             ) : (
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column'}}>
+              <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px'}}>
                 <div className="llm-output-box" style={{flex: 1, overflowY: 'auto', backgroundColor: 'var(--panel-bg)', borderColor: 'var(--border-color)'}} onMouseUp={handleTextSelection}>
                   {material}
                 </div>
                 {!isStudentView && <div className="highlight-hint"><TextSelect size={14} /> Highlight text to auto-fill AI tools</div>}
               </div>
             )}
+
+            {/* VOCABULARY SECTION */}
+            {(isGenerated && !isStudentView) || (isStudentView && vocabList.length > 0) ? (
+              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flex: 1}}>
+                <div className="sequence-header" style={{marginBottom: '16px'}}>
+                  <div>
+                    <div className="seq-kicker">VOCABULARY</div>
+                    <h3 className="seq-title" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                      Vocab Homework
+                      {!isStudentView && (
+                        <button 
+                          className="icon-btn" 
+                          onClick={() => setShowVocabOverride(!showVocabOverride)} 
+                          title="Manual Override / Paste AI Vocab"
+                          style={{color: showVocabOverride ? 'var(--accent-red)' : 'var(--text-muted)'}}
+                        >
+                          <PenTool size={16} />
+                        </button>
+                      )}
+                    </h3>
+                  </div>
+                </div>
+
+                {showVocabOverride ? (
+                  <div style={{padding: '16px', backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', marginBottom: '16px'}}>
+                    <label style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '8px', display: 'block'}}>Manual Override / Paste AI Vocab JSON</label>
+                    <textarea 
+                      className="custom-input custom-scrollbar" 
+                      style={{minHeight: '200px', resize: 'vertical', fontSize: '0.85rem', fontFamily: 'monospace', width: '100%'}}
+                      placeholder='Paste the JSON from external AI here...'
+                      value={vocabOverrideJson}
+                      onChange={e => setVocabOverrideJson(e.target.value)}
+                    />
+                    {vocabOverrideError && <div style={{color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '8px'}}>{vocabOverrideError}</div>}
+                    <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '12px'}}>
+                      <button className="btn-primary" onClick={handleApplyVocabOverride}>Apply Vocab</button>
+                    </div>
+                  </div>
+                ) : (
+                  vocabList.length > 0 ? (
+                    <div className="vocab-table-container custom-scrollbar" style={{overflowX: 'auto', backgroundColor: 'var(--panel-bg)', border: '1px solid var(--border-color)', borderRadius: '8px', padding: '16px'}}>
+                      {!isStudentView && (
+                        <div style={{display: 'flex', gap: '16px', marginBottom: '12px', fontSize: '0.85rem'}}>
+                          <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}><input type="checkbox" checked={vocabVisibility.showPos} onChange={() => setVocabVisibility(v => ({...v, showPos: !v.showPos}))}/> Show POS</label>
+                          <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}><input type="checkbox" checked={vocabVisibility.showDefinition} onChange={() => setVocabVisibility(v => ({...v, showDefinition: !v.showDefinition}))}/> Show Definition</label>
+                          <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}><input type="checkbox" checked={vocabVisibility.showKorean} onChange={() => setVocabVisibility(v => ({...v, showKorean: !v.showKorean}))}/> Show Korean</label>
+                          <label style={{display: 'flex', alignItems: 'center', gap: '4px'}}><input type="checkbox" checked={vocabVisibility.showAssociation} onChange={() => setVocabVisibility(v => ({...v, showAssociation: !v.showAssociation}))}/> Show Association</label>
+                        </div>
+                      )}
+                      <table className="custom-table" style={{width: '100%', textAlign: 'left', borderCollapse: 'collapse', fontSize: '0.85rem'}}>
+                        <thead>
+                          <tr style={{borderBottom: '1px solid var(--border-color)'}}>
+                            <th style={{padding: '8px'}}>Word</th>
+                            <th style={{padding: '8px'}}>Part of Speech</th>
+                            <th style={{padding: '8px'}}>Definition</th>
+                            <th style={{padding: '8px'}}>Korean</th>
+                            <th style={{padding: '8px'}}>Association</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {vocabList.map((v, i) => (
+                            <tr key={i} style={{borderBottom: '1px solid var(--border-color)'}}>
+                              <td style={{padding: '8px'}}><strong>{v.word}</strong></td>
+                              <td style={{padding: '8px'}}>{(!isStudentView || vocabVisibility.showPos) ? v.pos : <span style={{color: 'transparent', borderBottom: '1px solid var(--text-main)'}}>_______</span>}</td>
+                              <td style={{padding: '8px'}}>{(!isStudentView || vocabVisibility.showDefinition) ? v.definition : <span style={{color: 'transparent', borderBottom: '1px solid var(--text-main)'}}>__________________</span>}</td>
+                              <td style={{padding: '8px'}}>{(!isStudentView || vocabVisibility.showKorean) ? v.koreanTranslation : <span style={{color: 'transparent', borderBottom: '1px solid var(--text-main)'}}>_______</span>}</td>
+                              <td style={{padding: '8px'}}>{(!isStudentView || vocabVisibility.showAssociation) ? v.wordAssociation : <span style={{color: 'transparent', borderBottom: '1px solid var(--text-main)'}}>_______</span>}</td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : <p style={{color: 'var(--text-muted)'}}>No vocabulary generated yet. Use the Vocab Homework Maker tool.</p>
+                )}
+              </div>
+            ) : null}
           </div>
 
           {/* RIGHT COLUMN: TOOLS & FLOW */}
@@ -921,16 +1051,39 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
                 <div className="seq-kicker">END OF DAY LOGGING</div>
                 <h3 className="seq-title" style={{marginBottom: '16px'}}>Scoring & Export</h3>
                 
-                <div className="score-input-group" style={{marginBottom: 16}}><label>Assignment Score</label><input type="text" className="custom-input" value={scores.assignment} onChange={e => setScores({...scores, assignment: e.target.value})}/></div>
-                <div className="score-input-group" style={{marginBottom: 16}}><label>Vocab Assignment Score</label><input type="text" className="custom-input" value={scores.vocabAssignment} onChange={e => setScores({...scores, vocabAssignment: e.target.value})}/></div>
-                <div className="score-input-group" style={{marginBottom: 16}}><label>Vocab Quiz Score</label><input type="text" className="custom-input" value={scores.vocabQuiz} onChange={e => setScores({...scores, vocabQuiz: e.target.value})}/></div>
+                <div className="score-input-group" style={{marginBottom: 16}}>
+                  <label>Assignment Score</label>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <input type="number" min="0" className="custom-input score-small" value={scores.assignment.acquired} onChange={e => setScores({...scores, assignment: {...scores.assignment, acquired: e.target.value}})} placeholder="Acq"/>
+                    <span style={{fontSize: '1.2rem', color: 'var(--text-muted)'}}>/</span>
+                    <input type="number" min="0" className="custom-input score-small" value={scores.assignment.total} onChange={e => setScores({...scores, assignment: {...scores.assignment, total: e.target.value}})} placeholder="Tot"/>
+                  </div>
+                </div>
+                <div className="score-input-group" style={{marginBottom: 16}}>
+                  <label>Vocab Assignment Score</label>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <input type="number" min="0" className="custom-input score-small" value={scores.vocabAssignment.acquired} onChange={e => setScores({...scores, vocabAssignment: {...scores.vocabAssignment, acquired: e.target.value}})} placeholder="Acq"/>
+                    <span style={{fontSize: '1.2rem', color: 'var(--text-muted)'}}>/</span>
+                    <input type="number" min="0" className="custom-input score-small" value={scores.vocabAssignment.total} onChange={e => setScores({...scores, vocabAssignment: {...scores.vocabAssignment, total: e.target.value}})} placeholder="Tot"/>
+                  </div>
+                </div>
+                <div className="score-input-group" style={{marginBottom: 16}}>
+                  <label>Vocab Quiz Score</label>
+                  <div style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                    <input type="number" min="0" className="custom-input score-small" value={scores.vocabQuiz.acquired} onChange={e => setScores({...scores, vocabQuiz: {...scores.vocabQuiz, acquired: e.target.value}})} placeholder="Acq"/>
+                    <span style={{fontSize: '1.2rem', color: 'var(--text-muted)'}}>/</span>
+                    <input type="number" min="0" className="custom-input score-small" value={scores.vocabQuiz.total} onChange={e => setScores({...scores, vocabQuiz: {...scores.vocabQuiz, total: e.target.value}})} placeholder="Tot"/>
+                  </div>
+                </div>
                 
                 <div className="activities-scoring">
                   <label>Activities / Module Scores</label>
                   {activities.map((activity, index) => (
-                    <div className="activity-row" key={activity.id}>
-                      <input type="text" className="custom-input activity-input" placeholder="Task Title" value={activity.title} onChange={e => updateActivity(activity.id, 'title', e.target.value)}/>
-                      <input type="text" className="custom-input score-small" placeholder="Score" value={activity.score} onChange={e => updateActivity(activity.id, 'score', e.target.value)}/>
+                    <div className="activity-row" key={activity.id} style={{display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '8px'}}>
+                      <input type="text" className="custom-input activity-input" style={{flex: 1}} placeholder="Task Title" value={activity.title} onChange={e => updateActivity(activity.id, 'title', e.target.value)}/>
+                      <input type="number" min="0" className="custom-input score-small" style={{width: '60px'}} placeholder="Acq" value={activity.acquired} onChange={e => updateActivity(activity.id, 'acquired', e.target.value)}/>
+                      <span style={{color: 'var(--text-muted)'}}>/</span>
+                      <input type="number" min="0" className="custom-input score-small" style={{width: '60px'}} placeholder="Tot" value={activity.total} onChange={e => updateActivity(activity.id, 'total', e.target.value)}/>
                       {activities.length > 1 && <button className="icon-btn" onClick={() => handleRemoveActivity(activity.id)}><Trash2 size={16} /></button>}
                       {index === activities.length - 1 && <button className="icon-btn" onClick={handleAddActivity}><Plus size={16} /></button>}
                     </div>
