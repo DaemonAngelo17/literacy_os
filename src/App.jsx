@@ -898,19 +898,9 @@ ${errorMemory.length > 0 ? errorMemory.map(e => `- ${e.toolName} Failed: ${e.inp
 Please format your final feedback clearly with a summary of their performance, areas of strength, areas for improvement, and recommended next steps. Output only the final feedback text without markdown conversational filler.`;
 
     return (
-      <div 
-        style={{
-          position: 'fixed', inset: 0, zIndex: 9999,
-          backgroundColor: 'rgba(0,0,0,0.6)', backdropFilter: 'blur(4px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center'
-        }}
-      >
-        <div style={{
-          background: 'var(--bg-main)', border: '1px solid var(--border-color)',
-          borderRadius: '16px', padding: '32px', width: '800px', maxWidth: '90vw', maxHeight: '90vh', overflowY: 'auto',
-          boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
-        }} className="custom-scrollbar">
-          <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px', borderBottom: '1px solid var(--border-color)', paddingBottom: '16px'}}>
+      <div className="modal-overlay" style={{zIndex: 9999}}>
+        <div className="modal-content" style={{maxWidth: '800px'}}>
+          <div className="modal-header">
             <div>
               <div style={{color:'var(--accent-red)', fontSize:'0.75rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>FINAL STEP</div>
               <h2 style={{fontFamily:'var(--font-head)', fontSize:'1.6rem', margin:0}}>Configure &amp; Download Report</h2>
@@ -918,88 +908,90 @@ Please format your final feedback clearly with a summary of their performance, a
             <button className="icon-btn" onClick={() => setIsDownloadModalOpen(false)}><X size={24}/></button>
           </div>
 
-          <div style={{display:'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginBottom: '24px'}}>
-            <div>
-              <label className="dropdown-label">CLASS DATE</label>
-              <input type="date" className="custom-input" value={classDate} onChange={e => setClassDate(e.target.value)} style={{width: '100%'}} />
+          <div className="modal-body custom-scrollbar" style={{paddingBottom: 0}}>
+            <div style={{display:'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '24px', marginBottom: '24px'}}>
+              <div>
+                <label className="dropdown-label">CLASS DATE</label>
+                <input type="date" className="custom-input" value={classDate} onChange={e => setClassDate(e.target.value)} style={{width: '100%'}} />
+              </div>
+              <div>
+                <label className="dropdown-label">START TIME</label>
+                <input type="time" className="custom-input" value={classStartTime} onChange={e => setClassStartTime(e.target.value)} style={{width: '100%'}} />
+              </div>
+              <div>
+                <label className="dropdown-label">END TIME</label>
+                <input type="time" className="custom-input" value={classEndTime} onChange={e => setClassEndTime(e.target.value)} style={{width: '100%'}} />
+              </div>
             </div>
-            <div>
-              <label className="dropdown-label">START TIME</label>
-              <input type="time" className="custom-input" value={classStartTime} onChange={e => setClassStartTime(e.target.value)} style={{width: '100%'}} />
-            </div>
-            <div>
-              <label className="dropdown-label">END TIME</label>
-              <input type="time" className="custom-input" value={classEndTime} onChange={e => setClassEndTime(e.target.value)} style={{width: '100%'}} />
-            </div>
-          </div>
 
-          <div style={{marginBottom: '24px'}}>
-            <label className="dropdown-label">EDITABLE 12-STEP ROADMAP (Appears on PDF)</label>
-            <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
-              {editableRoadmapSteps.map((step, idx) => (
-                <div key={idx} style={{display: 'flex', alignItems: 'flex-start', gap: '12px'}}>
-                  <div style={{fontWeight: 'bold', color: 'var(--text-muted)', paddingTop: '8px', minWidth: '24px'}}>{idx + 1}.</div>
-                  <textarea
-                    className="custom-input custom-scrollbar"
-                    value={step}
-                    onChange={e => {
-                      const newSteps = [...editableRoadmapSteps];
-                      newSteps[idx] = e.target.value;
-                      setEditableRoadmapSteps(newSteps);
-                    }}
-                    style={{width: '100%', minHeight: '80px', fontSize: '0.85rem', resize: 'vertical'}}
-                  />
-                </div>
-              ))}
-              {editableRoadmapSteps.length === 0 && (
-                <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>No roadmap generated yet.</p>
-              )}
+            <div style={{marginBottom: '24px'}}>
+              <label className="dropdown-label">EDITABLE 12-STEP ROADMAP (Appears on PDF)</label>
+              <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                {editableRoadmapSteps.map((step, idx) => (
+                  <div key={idx} style={{display: 'flex', alignItems: 'flex-start', gap: '12px'}}>
+                    <div style={{fontWeight: 'bold', color: 'var(--text-muted)', paddingTop: '8px', minWidth: '24px'}}>{idx + 1}.</div>
+                    <textarea
+                      className="custom-input custom-scrollbar"
+                      value={step}
+                      onChange={e => {
+                        const newSteps = [...editableRoadmapSteps];
+                        newSteps[idx] = e.target.value;
+                        setEditableRoadmapSteps(newSteps);
+                      }}
+                      style={{width: '100%', minHeight: '80px', fontSize: '0.85rem', resize: 'vertical'}}
+                    />
+                  </div>
+                ))}
+                {editableRoadmapSteps.length === 0 && (
+                  <p style={{fontSize: '0.85rem', color: 'var(--text-muted)'}}>No roadmap generated yet.</p>
+                )}
+              </div>
             </div>
-          </div>
 
-          <div style={{marginBottom: '24px'}}>
-            <label className="dropdown-label">TEACHER'S SESSION NOTES (Included in Prompt below)</label>
-            <textarea 
-              className="custom-input custom-scrollbar" 
-              value={sessionNotes} 
-              onChange={e => setSessionNotes(e.target.value)} 
-              placeholder="Any qualitative observations to feed the AI for the final summary..."
-              style={{width: '100%', minHeight: '80px', fontSize: '0.85rem'}}
-            />
-          </div>
-
-          <div style={{border: '1px dashed var(--accent-red)', padding: '16px', borderRadius: '8px', marginBottom: '24px', backgroundColor: 'var(--panel-bg)'}}>
-            <h4 style={{color: 'var(--accent-red)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px'}}><AlertCircle size={16}/> AI Override Fallback</h4>
-            <p style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px'}}>If the internal AI is failing to generate a final summary, copy this prompt to ChatGPT/Claude to generate the final student feedback.</p>
-            
-            <div style={{position: 'relative', marginBottom: '16px'}}>
+            <div style={{marginBottom: '24px'}}>
+              <label className="dropdown-label">TEACHER'S SESSION NOTES (Included in Prompt below)</label>
               <textarea 
                 className="custom-input custom-scrollbar" 
-                readOnly 
-                value={fallbackDownloadPrompt} 
-                style={{width: '100%', minHeight: '100px', fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', backgroundColor: 'var(--bg-main)'}}
+                value={sessionNotes} 
+                onChange={e => setSessionNotes(e.target.value)} 
+                placeholder="Any qualitative observations to feed the AI for the final summary..."
+                style={{width: '100%', minHeight: '80px', fontSize: '0.85rem'}}
               />
-              <button 
-                className="icon-btn" 
-                onClick={() => navigator.clipboard.writeText(fallbackDownloadPrompt)} 
-                style={{position: 'absolute', top: '8px', right: '8px', backgroundColor: 'var(--panel-bg)', padding: '6px'}}
-                title="Copy Prompt"
-              >
-                <Check size={14} />
-              </button>
             </div>
 
-            <label className="dropdown-label">PASTE AI FINAL FEEDBACK HERE (Appears on PDF)</label>
-            <textarea 
-              className="custom-input custom-scrollbar" 
-              value={aiFinalFeedback} 
-              onChange={e => setAiFinalFeedback(e.target.value)} 
-              placeholder="Paste the final generated feedback from the external AI here..."
-              style={{width: '100%', minHeight: '120px', fontSize: '0.85rem'}}
-            />
+            <div style={{border: '1px dashed var(--accent-red)', padding: '16px', borderRadius: '8px', marginBottom: '24px', backgroundColor: 'var(--panel-bg)'}}>
+              <h4 style={{color: 'var(--accent-red)', marginBottom: '8px', display: 'flex', alignItems: 'center', gap: '8px'}}><AlertCircle size={16}/> AI Override Fallback</h4>
+              <p style={{fontSize: '0.85rem', color: 'var(--text-muted)', marginBottom: '12px'}}>If the internal AI is failing to generate a final summary, copy this prompt to ChatGPT/Claude to generate the final student feedback.</p>
+              
+              <div style={{position: 'relative', marginBottom: '16px'}}>
+                <textarea 
+                  className="custom-input custom-scrollbar" 
+                  readOnly 
+                  value={fallbackDownloadPrompt} 
+                  style={{width: '100%', minHeight: '100px', fontSize: '0.75rem', fontFamily: 'monospace', color: 'var(--text-muted)', backgroundColor: 'var(--bg-main)'}}
+                />
+                <button 
+                  className="icon-btn" 
+                  onClick={() => navigator.clipboard.writeText(fallbackDownloadPrompt)} 
+                  style={{position: 'absolute', top: '8px', right: '8px', backgroundColor: 'var(--panel-bg)', padding: '6px'}}
+                  title="Copy Prompt"
+                >
+                  <Check size={14} />
+                </button>
+              </div>
+
+              <label className="dropdown-label">PASTE AI FINAL FEEDBACK HERE (Appears on PDF)</label>
+              <textarea 
+                className="custom-input custom-scrollbar" 
+                value={aiFinalFeedback} 
+                onChange={e => setAiFinalFeedback(e.target.value)} 
+                placeholder="Paste the final generated feedback from the external AI here..."
+                style={{width: '100%', minHeight: '120px', fontSize: '0.85rem'}}
+              />
+            </div>
           </div>
 
-          <div style={{display:'flex', gap:'12px', marginTop:'28px', borderTop: '1px solid var(--border-color)', paddingTop: '24px'}}>
+          <div className="modal-footer" style={{display:'flex', gap:'12px'}}>
             <button
               className="btn-primary"
               style={{flex:1, padding:'16px', fontSize: '1rem', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px'}}
@@ -1016,21 +1008,13 @@ Please format your final feedback clearly with a summary of their performance, a
   // ── VOCAB CONFIG MODAL ──────────────────────────────────────────────────────
   const VocabConfigModal = () => (
     <div 
-      style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        backgroundColor: 'rgba(0,0,0,0.5)', backdropFilter: 'blur(4px)',
-        display: 'flex', alignItems: 'center', justifyContent: 'center'
-      }}
+      className="modal-overlay"
       onClick={(e) => {
         if (e.target === e.currentTarget) setShowVocabModal(false);
       }}
     >
-      <div style={{
-        background: 'var(--panel-bg)', border: '1px solid var(--border-color)',
-        borderRadius: '16px', padding: '32px', width: '420px', maxWidth: '90vw',
-        boxShadow: '0 24px 64px rgba(0,0,0,0.6)'
-      }}>
-        <div style={{display:'flex', justifyContent:'space-between', alignItems:'center', marginBottom:'24px'}}>
+      <div className="modal-content" style={{maxWidth: '420px'}}>
+        <div className="modal-header">
           <div>
             <div style={{color:'var(--accent-red)', fontSize:'0.7rem', fontWeight:700, textTransform:'uppercase', letterSpacing:'1px', marginBottom:'4px'}}>VOCAB CONFIGURATION</div>
             <h2 style={{fontFamily:'var(--font-head)', fontSize:'1.4rem', margin:0}}>Configure &amp; Generate</h2>
@@ -1038,7 +1022,7 @@ Please format your final feedback clearly with a summary of their performance, a
           <button className="icon-btn" onClick={() => setShowVocabModal(false)}><X size={20}/></button>
         </div>
 
-        <div style={{display:'flex', flexDirection:'column', gap:'20px'}}>
+        <div className="modal-body">
           <div>
             <label style={{fontSize:'0.8rem', color:'var(--text-muted)', fontWeight:600, textTransform:'uppercase', letterSpacing:'0.5px', display:'block', marginBottom:'8px'}}>Word Count</label>
             <input
@@ -1066,7 +1050,7 @@ Please format your final feedback clearly with a summary of their performance, a
           </div>
         </div>
 
-        <div style={{display:'flex', gap:'12px', marginTop:'28px'}}>
+        <div className="modal-footer" style={{display:'flex', gap:'12px'}}>
           <button
             className="btn-primary"
             style={{flex:1, padding:'12px'}}
@@ -1088,21 +1072,9 @@ Please format your final feedback clearly with a summary of their performance, a
   );
   // ── CALIBRATION MODAL ────────────────────────────────────────────────────────
   const CalibrationModal = () => (
-    <div 
-      style={{
-        position: 'fixed', inset: 0, zIndex: 50,
-        display: 'flex', alignItems: 'center', justifyContent: 'center',
-        backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)'
-      }}
-    >
-      <div 
-        style={{
-          width: '90%', maxWidth: '500px', backgroundColor: 'var(--bg-main)', 
-          borderRadius: '12px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
-          border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column'
-        }}
-      >
-        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px'}}>
+    <div className="modal-overlay">
+      <div className="modal-content" style={{maxWidth: '500px'}}>
+        <div className="modal-header" style={{alignItems: 'center'}}>
           <h2 style={{margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px'}}>
             <Settings size={20} style={{color: 'var(--accent-red)'}}/>
             Pre-Generation Calibration
@@ -1110,60 +1082,62 @@ Please format your final feedback clearly with a summary of their performance, a
           <button className="icon-btn" onClick={() => setShowCalibrationModal(false)}><X size={20} /></button>
         </div>
 
-        <div style={{marginBottom: '20px'}}>
-          <label className="dropdown-label">Linguistic Complexity (Proficiency) Shift</label>
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-            <span style={{fontSize: '0.8rem'}}>-2</span>
-            <input 
-              type="range" min="-2" max="2" step="1" 
-              value={profModifier} 
-              onChange={e => setProfModifier(parseInt(e.target.value))} 
-              style={{flex: 1, margin: '0 12px'}}
-            />
-            <span style={{fontSize: '0.8rem'}}>+2</span>
+        <div className="modal-body">
+          <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+            <label className="dropdown-label">Linguistic Complexity (Proficiency) Shift</label>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+              <span style={{fontSize: '0.8rem'}}>-2</span>
+              <input 
+                type="range" min="-2" max="2" step="1" 
+                value={profModifier} 
+                onChange={e => setProfModifier(parseInt(e.target.value))} 
+                style={{flex: 1, margin: '0 12px'}}
+              />
+              <span style={{fontSize: '0.8rem'}}>+2</span>
+            </div>
+            <div style={{textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)'}}>
+              {profModifier === 0 ? 'Baseline' : profModifier > 0 ? `+${profModifier} Levels` : `${profModifier} Levels`}
+            </div>
           </div>
-          <div style={{textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px'}}>
-            {profModifier === 0 ? 'Baseline' : profModifier > 0 ? `+${profModifier} Levels` : `${profModifier} Levels`}
+
+          <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+            <label className="dropdown-label">Cognitive Complexity (Grade Level) Shift</label>
+            <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+              <span style={{fontSize: '0.8rem'}}>-2</span>
+              <input 
+                type="range" min="-2" max="2" step="1" 
+                value={gradeModifier} 
+                onChange={e => setGradeModifier(parseInt(e.target.value))} 
+                style={{flex: 1, margin: '0 12px'}}
+              />
+              <span style={{fontSize: '0.8rem'}}>+2</span>
+            </div>
+            <div style={{textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)'}}>
+              {gradeModifier === 0 ? 'Baseline' : gradeModifier > 0 ? `+${gradeModifier} Levels` : `${gradeModifier} Levels`}
+            </div>
           </div>
+
+          {matrixTypeToGenerate === 'cross' && (
+            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
+              <label className="dropdown-label">Cross-Disciplinary Curriculum Sequence</label>
+              <select 
+                className="custom-input" 
+                value={selectedSequenceId} 
+                onChange={e => setSelectedSequenceId(e.target.value)}
+                style={{width: '100%'}}
+              >
+                <option value="auto">Auto-Detect based on Text</option>
+                {CURRICULUM_SEQUENCES.map(seq => (
+                  <option key={seq.id} value={seq.id}>
+                    {seq.id} {seq.title}: {seq.question}
+                  </option>
+                ))}
+              </select>
+            </div>
+          )}
         </div>
 
-        <div style={{marginBottom: '24px'}}>
-          <label className="dropdown-label">Cognitive Complexity (Grade Level) Shift</label>
-          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
-            <span style={{fontSize: '0.8rem'}}>-2</span>
-            <input 
-              type="range" min="-2" max="2" step="1" 
-              value={gradeModifier} 
-              onChange={e => setGradeModifier(parseInt(e.target.value))} 
-              style={{flex: 1, margin: '0 12px'}}
-            />
-            <span style={{fontSize: '0.8rem'}}>+2</span>
-          </div>
-          <div style={{textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px'}}>
-            {gradeModifier === 0 ? 'Baseline' : gradeModifier > 0 ? `+${gradeModifier} Levels` : `${gradeModifier} Levels`}
-          </div>
-        </div>
-
-        {matrixTypeToGenerate === 'cross' && (
-          <div style={{marginBottom: '24px'}}>
-            <label className="dropdown-label">Cross-Disciplinary Curriculum Sequence</label>
-            <select 
-              className="custom-input" 
-              value={selectedSequenceId} 
-              onChange={e => setSelectedSequenceId(e.target.value)}
-              style={{width: '100%'}}
-            >
-              <option value="auto">Auto-Detect based on Text</option>
-              {CURRICULUM_SEQUENCES.map(seq => (
-                <option key={seq.id} value={seq.id}>
-                  {seq.id} {seq.title}: {seq.question}
-                </option>
-              ))}
-            </select>
-          </div>
-        )}
-
-        <div style={{display:'flex', gap:'12px', marginTop:'16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px'}}>
+        <div className="modal-footer" style={{display:'flex', gap:'12px'}}>
           <button
             className="btn-primary"
             style={{flex:1, padding:'12px'}}
