@@ -38,12 +38,9 @@ const DAILY_FLOW_STEPS = [
 ];
 
 const ALL_AI_TOOLS = [
-  { id: 'thesis', title: 'Thesis Generator', desc: 'Tiered thesis statements & arguments.', promptPrefix: () => 'Output JSON strictly formatted as: { "theses": [ { "level": "baseline", "statement": "...", "args": ["...","..."] }, { "level": "intermediate", "statement": "...", "args": ["...","..."] }, { "level": "advanced", "statement": "...", "args": ["...","..."] } ] }. Based on this text:', type: 'THESIS', color: '#8b5cf6' },
-  { id: 'decoder', title: 'Cross-Lingual Decoder', desc: 'Literal, synonym, & Korean equivalents.', promptPrefix: (prof) => `Output JSON strictly formatted as: { "items": [ { "original": "...", "literal": "...", "synonym": "...", "korean": "..." } ] }. Find 3-5 complex idioms or difficult words matching a ${prof} student in this text:`, type: 'CROSS_LINGUAL', color: '#8b5cf6' },
-  { id: 'peer', title: 'Peer-Review Sandbox', desc: 'Compare draft against rubric & error history.', promptPrefix: () => 'Output JSON strictly formatted as: { "glows": ["...","..."], "grows": ["...","..."] }. Evaluate this draft paragraph specifically considering the student\'s recent error history:', type: 'PEER', color: '#8b5cf6' },
-  { id: 'quiz', title: 'Dynamic Quiz', desc: 'MCQ, Cloze, and Open-ended questions.', promptPrefix: (prof) => `Output JSON strictly formatted as: { "quiz": { "mcq": [{"question": "...", "answer": "..."}], "cloze": [{"question": "...", "answer": "..."}], "open": [{"question": "..."}] } }. Generate 2 MCQ, 2 Cloze, and 1 Open-ended question for a ${prof} student based on this text:`, type: 'QUIZ', color: '#8b5cf6' },
-  { id: 'summary', title: 'Summary Synthesizer', desc: 'Tiered scaffolding for summarizing.', promptPrefix: () => 'Output JSON strictly formatted as: { "tiers": { "beginner": "Cloze format summary...", "intermediate": "Sentence starter framework...", "advanced": "Inquiry outline format..." } }. Summarize this text:', type: 'SUMMARY', color: '#3b82f6' },
-  { id: 'error', title: 'Error Logger', desc: 'Track errors. Feeds into AI memory!', promptPrefix: () => 'You are an error correction logger. Review these student errors, categorize them, and output concise teacher feedback.', type: 'GENERIC', color: 'var(--accent-red)' }
+  { id: 'quiz', title: 'Quiz Maker', desc: 'Short-form questions (MCQ, Cloze).', promptPrefix: (prof, count, profMod, gradeMod) => `Output JSON strictly formatted as: { "quiz": { "mcq": [{"question": "...", "answer": "..."}], "cloze": [{"question": "...", "answer": "..."}] } }. Generate a quiz with ${count} questions for a student at proficiency level ${prof} (modifier ${profMod}) and grade modifier ${gradeMod} based on this text:`, type: 'QUIZ', color: '#8b5cf6' },
+  { id: 'exam', title: 'Exam Maker', desc: 'Long-form comprehensive assessment.', promptPrefix: (prof, count, profMod, gradeMod) => `Output JSON strictly formatted as: { "exam": { "open": [{"question": "..."}] } }. Generate an exam with ${count} open-ended questions for a student at proficiency level ${prof} (modifier ${profMod}) and grade modifier ${gradeMod} based on this text:`, type: 'EXAM', color: '#8b5cf6' },
+  { id: 'writing', title: 'Writing Prompts', desc: 'Creative and analytical writing tasks.', promptPrefix: (prof, count, profMod, gradeMod) => `Output JSON strictly formatted as: { "prompts": ["...", "..."] }. Generate ${count} writing prompts for a student at proficiency level ${prof} (modifier ${profMod}) and grade modifier ${gradeMod} based on this text:`, type: 'WRITING', color: '#3b82f6' }
 ];
 
 const CURRICULUM_SEQUENCES = [
@@ -138,9 +135,12 @@ export default function App() {
   const [toolInput, setToolInput] = useState('');
   const [toolOutput, setToolOutput] = useState('');
   const [toolType, setToolType] = useState('GENERIC');
+  const [toolProfModifier, setToolProfModifier] = useState(0);
+  const [toolGradeModifier, setToolGradeModifier] = useState(0);
+  const [toolItemCount, setToolItemCount] = useState(5);
   const [summaryTier, setSummaryTier] = useState('beginner');
 
-  const [favoriteTools, setFavoriteTools] = useLocalStorageState('literacy_os_fav_tools', ['thesis', 'summary', 'error']);
+  const [favoriteTools, setFavoriteTools] = useLocalStorageState('literacy_os_fav_tools', ['quiz', 'exam', 'writing']);
   const [showToolbox, setShowToolbox] = useState(false);
   const [expandedTaxonomy, setExpandedTaxonomy] = useState(null);
 
@@ -155,10 +155,12 @@ export default function App() {
   const [vocabOverrideError, setVocabOverrideError] = useState('');
   const [matrixOverrideJson, setMatrixOverrideJson] = useState('');
   const [matrixOverrideError, setMatrixOverrideError] = useState('');
+  const [toolOverrideJson, setToolOverrideJson] = useState('');
+  const [toolOverrideError, setToolOverrideError] = useState('');
 
   const printRef = useRef();
   const { executeQuery, isLoading: isToolLoading, error: toolError } = useGeminiQuery();
-  const { errorMemory } = useAILogger();
+
 
   useEffect(() => {
     setTempApiKeyInput(decryptData(encryptedApiKey));
@@ -461,6 +463,19 @@ Return ONLY valid JSON matching: { "sequences": [ { "sequenceId": "...", "sequen
     setFailSafeModal({ isOpen: true, type: 'CROSS_MATRIX', promptContent: fallbackPrompt });
   };
 
+  const handleApplyToolOverride = () => {
+    setToolOverrideError('');
+    try {
+      const cleaned = toolOverrideJson.replace(/```json|```/gi, '').trim();
+      const parsedData = JSON.parse(cleaned);
+      setToolOutput(JSON.stringify(parsedData, null, 2));
+      setFailSafeModal({ isOpen: false, type: '', promptContent: '' });
+      setToolOverrideJson('');
+    } catch (e) {
+      setToolOverrideError("Invalid format. Ensure you copied only the exact JSON object output.");
+    }
+  };
+
   const handleApplyMatrixOverride = () => {
     setMatrixOverrideError('');
     try {
@@ -552,7 +567,7 @@ GRADE LEVEL: ${grade}
 PROFICIENCY: ${proficiency}
 TARGET SKILLS: ${skillListStr || 'None specified'}
 SOURCE TEXT: ${toolInput || material || 'None'}
-STUDENT'S RECENT ERRORS: ${JSON.stringify(errorMemory)}
+
 HISTORICAL CONTEXT: ${previousLessonContext ? previousLessonContext : 'None provided.'} | STUDENT PROFILE: ${studentProfileContext ? studentProfileContext : 'None provided.'}. Use this historical data to calibrate difficulty and target recurring weaknesses.
 TASK: ${instruction}
 STRICT FORMATTING RULE: You must format your output EXACTLY according to the following markdown template. Do not include introductory or concluding conversational text. 
@@ -718,12 +733,22 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
 
   // TOOL ENGINE
   const openTool = (tool) => {
-    setActiveTool({ title: tool.title, desc: tool.desc, promptPrefix: tool.promptPrefix(proficiency) });
+    setActiveTool(tool);
     setToolType(tool.type);
+    setToolProfModifier(0);
+    setToolGradeModifier(0);
+    setToolItemCount(5);
     
     const selectedText = window.getSelection().toString().trim();
     setToolInput(selectedText || material); 
     setToolOutput('');
+  };
+
+  const triggerActiveToolFallback = () => {
+    if (!activeTool) return;
+    const currentPromptPrefix = activeTool.promptPrefix(proficiency, toolItemCount, toolProfModifier, toolGradeModifier);
+    const fallbackPrompt = `My internal engine failed. Please act as the tool "${activeTool.title}".\n\nINSTRUCTIONS:\n${currentPromptPrefix}\n\nINPUT MATERIAL:\n${toolInput || 'None'}`;
+    setFailSafeModal({ isOpen: true, type: 'TOOL', promptContent: fallbackPrompt });
   };
 
   const runToolLLM = async () => {
@@ -732,14 +757,15 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
       alert("Please configure AI API KEY in App Settings first.");
       return;
     }
-    if (!toolInput.trim()) return;
+    if (!toolInput.trim() || !activeTool) return;
     
+    const currentPromptPrefix = activeTool.promptPrefix(proficiency, toolItemCount, toolProfModifier, toolGradeModifier);
     let isErrorLogger = activeTool.title.includes("Error Correction");
-    const result = await executeQuery(apiKey, activeTool.promptPrefix, toolInput, isErrorLogger, selectedSkills, previousLessonContext, studentProfileContext);
+    const result = await executeQuery(apiKey, currentPromptPrefix, toolInput, isErrorLogger, selectedSkills, previousLessonContext, studentProfileContext);
     if (result) {
       setToolOutput(result);
     } else {
-      triggerToolFallback(activeTool.title, 'Generate the standard output for this tool.', activeTool.promptPrefix);
+      triggerActiveToolFallback();
     }
   };
 
@@ -892,9 +918,6 @@ ${activities.filter(a => a.title).map(a => `- ${a.title}: ${a.acquired || 0}/${a
 TEACHER'S INTERNAL NOTES:
 ${sessionNotes || 'None'}
 
-LOGGED ERRORS (AI generation failures to account for):
-${errorMemory.length > 0 ? errorMemory.map(e => `- ${e.toolName} Failed: ${e.input}`).join('\n') : 'None'}
-
 Please format your final feedback clearly with a summary of their performance, areas of strength, areas for improvement, and recommended next steps. Output only the final feedback text without markdown conversational filler.`;
 
     return (
@@ -949,12 +972,12 @@ Please format your final feedback clearly with a summary of their performance, a
             </div>
 
             <div style={{marginBottom: '24px'}}>
-              <label className="dropdown-label">TEACHER'S SESSION NOTES (Included in Prompt below)</label>
+              <label className="dropdown-label">TEACHER'S SESSION NOTES & ERROR LOGGER (Included in Prompt below)</label>
               <textarea 
                 className="custom-input custom-scrollbar" 
                 value={sessionNotes} 
                 onChange={e => setSessionNotes(e.target.value)} 
-                placeholder="Any qualitative observations to feed the AI for the final summary..."
+                placeholder="Log AI errors here, and include any qualitative observations for the final summary..."
                 style={{width: '100%', minHeight: '80px', fontSize: '0.85rem'}}
               />
             </div>
@@ -1202,6 +1225,22 @@ Please format your final feedback clearly with a summary of their performance, a
                   </div>
                 </div>
               )}
+              {failSafeModal.type === 'TOOL' && (
+                <div style={{paddingTop: '16px', borderTop: '1px solid var(--border-color)'}}>
+                  <p style={{marginBottom: '8px', fontWeight: 'bold', color: 'var(--text-main)'}}>Paste Tool Output Data</p>
+                  <textarea 
+                    className="custom-input custom-scrollbar" 
+                    style={{minHeight: '200px', resize: 'vertical', fontSize: '0.85rem', fontFamily: 'monospace'}}
+                    placeholder='Paste external LLM JSON here...'
+                    value={toolOverrideJson}
+                    onChange={e => setToolOverrideJson(e.target.value)}
+                  />
+                  {toolOverrideError && <div style={{color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '8px'}}>{toolOverrideError}</div>}
+                  <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '12px'}}>
+                    <button className="btn-primary" onClick={handleApplyToolOverride}>Incorporate Tool Data</button>
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         </div>
@@ -1227,17 +1266,55 @@ Please format your final feedback clearly with a summary of their performance, a
                 onChange={e => setToolInput(e.target.value)}
                 placeholder="Paste the reading material, paragraph, or specific words here..."
               ></textarea>
+              <div style={{marginTop: '16px', marginBottom: '16px', padding: '16px', backgroundColor: 'var(--bg-dark)', borderRadius: '8px', border: '1px solid var(--border-color)'}}>
+                <h4 style={{margin: '0 0 12px 0', fontSize: '0.9rem', color: 'var(--accent-red)'}}>Pre-Generation Calibration</h4>
+                <div style={{display: 'flex', flexDirection: 'column', gap: '12px'}}>
+                  <div>
+                    <label style={{fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px'}}>Linguistic Complexity (Proficiency) Shift</label>
+                    <div style={{display: 'flex', alignItems: 'center'}}>
+                      <span style={{fontSize: '0.8rem'}}>-2</span>
+                      <input type="range" min="-2" max="2" step="1" value={toolProfModifier} onChange={e => setToolProfModifier(parseInt(e.target.value))} style={{flex: 1, margin: '0 12px'}} />
+                      <span style={{fontSize: '0.8rem'}}>+2</span>
+                    </div>
+                    <div style={{textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)'}}>{toolProfModifier === 0 ? 'Baseline' : toolProfModifier > 0 ? `+${toolProfModifier} Levels` : `${toolProfModifier} Levels`}</div>
+                  </div>
+                  <div>
+                    <label style={{fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px'}}>Cognitive/Analytical (Grade Level) Shift</label>
+                    <div style={{display: 'flex', alignItems: 'center'}}>
+                      <span style={{fontSize: '0.8rem'}}>-2</span>
+                      <input type="range" min="-2" max="2" step="1" value={toolGradeModifier} onChange={e => setToolGradeModifier(parseInt(e.target.value))} style={{flex: 1, margin: '0 12px'}} />
+                      <span style={{fontSize: '0.8rem'}}>+2</span>
+                    </div>
+                    <div style={{textAlign: 'center', fontSize: '0.75rem', color: 'var(--text-muted)'}}>{toolGradeModifier === 0 ? 'Baseline' : toolGradeModifier > 0 ? `+${toolGradeModifier} Levels` : `${toolGradeModifier} Levels`}</div>
+                  </div>
+                  <div>
+                    <label style={{fontSize: '0.8rem', color: 'var(--text-muted)', display: 'block', marginBottom: '4px'}}>Number of Questions/Prompts</label>
+                    <input type="number" min="1" max="50" value={toolItemCount} onChange={e => setToolItemCount(parseInt(e.target.value))} className="custom-input" style={{width: '100%', padding: '6px'}} />
+                  </div>
+                </div>
+              </div>
               
-              <button 
-                className="btn-primary" 
-                onClick={runToolLLM}
-                disabled={isToolLoading || !toolInput.trim() || !encryptedApiKey}
-                title={!encryptedApiKey ? "API Key required" : ""}
-              >
-                {isToolLoading ? 'Processing with AI...' : 'Generate Output'}
-              </button>
+              <div style={{display: 'flex', gap: '12px', alignItems: 'center'}}>
+                <button 
+                  className="btn-primary" 
+                  onClick={runToolLLM}
+                  disabled={isToolLoading || !toolInput.trim() || !encryptedApiKey}
+                  title={!encryptedApiKey ? "API Key required" : ""}
+                  style={{flex: 1}}
+                >
+                  {isToolLoading ? 'Processing with AI...' : 'Generate Output'}
+                </button>
+                <button 
+                  className="icon-btn" 
+                  onClick={triggerActiveToolFallback}
+                  title="Fail-Safe (Manual Override)"
+                  style={{border: '1px solid var(--border-color)', padding: '8px 16px', color: 'var(--text-main)'}}
+                >
+                  Manual Override
+                </button>
+              </div>
 
-              {toolError && <div style={{color: 'var(--accent-red)', fontSize: '0.85rem'}}>{toolError}</div>}
+              {toolError && <div style={{color: 'var(--accent-red)', fontSize: '0.85rem', marginTop: '12px'}}>{toolError}</div>}
 
               {toolOutput && (
                 <div style={{marginTop: '16px'}}>
@@ -1979,7 +2056,7 @@ Please format your final feedback clearly with a summary of their performance, a
              aiFinalFeedback={aiFinalFeedback}
              scores={scores}
              activities={activities}
-             errors={errorMemory}
+
              sessionNotes={sessionNotes}
              vocabList={vocabList}
              vocabVisibility={vocabVisibility}

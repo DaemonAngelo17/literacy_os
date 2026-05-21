@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 
-const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficiency, duration, skills, material, roadmapText, learningMatrix, crossMatrix, aiFinalFeedback, scores, activities, errors, sessionNotes, vocabList, vocabVisibility }, ref) => {
+const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficiency, duration, skills, material, roadmapText, learningMatrix, crossMatrix, aiFinalFeedback, scores, activities, sessionNotes, vocabList, vocabVisibility }, ref) => {
   return (
     <div ref={ref} className="print-layout">
       <div className="print-header">
@@ -98,17 +98,6 @@ const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficien
             ))}
           </tbody>
         </table>
-      </div>
-
-      <div className="print-section" style={{pageBreakInside: 'avoid'}}>
-        <h2>Logged Errors & Feedback</h2>
-        <ul className="print-list">
-          {errors.length > 0 ? errors.map((err, i) => (
-            <li key={i} style={{marginBottom: '8px'}}>
-              <strong>{err.toolName}:</strong> {err.input.substring(0, 150)}{err.input.length > 150 ? '...' : ''}
-            </li>
-          )) : <li>No errors logged today.</li>}
-        </ul>
       </div>
 
       {sessionNotes && (
