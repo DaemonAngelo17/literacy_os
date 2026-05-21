@@ -1600,7 +1600,7 @@ Please format your final feedback clearly with a summary of their performance, a
 
 
             {!isGenerated ? (
-              <div {...getRootProps()} style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px', border: isDragActive ? '2px dashed var(--accent-red)' : '1px solid transparent', backgroundColor: isDragActive ? 'var(--bg-hover)' : 'transparent', transition: 'all 0.2s ease', padding: isDragActive ? '16px' : '0', borderRadius: '8px'}}>
+              <div {...getRootProps()} style={{flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: '300px', border: isDragActive ? '2px dashed var(--accent-red)' : '1px solid transparent', backgroundColor: isDragActive ? 'var(--bg-hover)' : 'transparent', transition: 'all 0.2s ease', padding: isDragActive ? '16px' : '0', borderRadius: '8px'}}>
                 <input {...getInputProps()} />
                 {!isStudentView && (
                   <div 
@@ -1627,7 +1627,7 @@ Please format your final feedback clearly with a summary of their performance, a
                 )}
               </div>
             ) : (
-              <div style={{flex: 1, display: 'flex', flexDirection: 'column', minHeight: '300px'}}>
+              <div style={{flexShrink: 0, display: 'flex', flexDirection: 'column', minHeight: '300px'}}>
                 <div className="llm-output-box" style={{flex: 1, overflowY: 'auto', backgroundColor: 'var(--panel-bg)', borderColor: 'var(--border-color)'}} onMouseUp={handleTextSelection}>
                   {material}
                 </div>
@@ -1637,7 +1637,7 @@ Please format your final feedback clearly with a summary of their performance, a
 
             {/* VOCABULARY SECTION */}
             {(isGenerated && !isStudentView) || (isStudentView && vocabList.length > 0) ? (
-              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flex: 1}}>
+              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flexShrink: 0}}>
                 <div className="sequence-header" style={{marginBottom: '16px', alignItems: 'flex-start'}}>
                   <div>
                     <div className="seq-kicker">VOCABULARY</div>
@@ -1725,7 +1725,7 @@ Please format your final feedback clearly with a summary of their performance, a
 
             {/* DEEP LEARNING MATRIX SECTION */}
             {(!isStudentView || (isStudentView && learningMatrix)) && isGenerated && (
-              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flex: 1}}>
+              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flexShrink: 0}}>
                 <div className="sequence-header" style={{marginBottom: '16px'}}>
                   <div>
                     <div className="seq-kicker">COGNITION & SYNTHESIS</div>
@@ -1746,7 +1746,7 @@ Please format your final feedback clearly with a summary of their performance, a
 
             {/* CROSS-DISCIPLINARY MATRIX SECTION */}
             {(!isStudentView || (isStudentView && crossMatrix)) && isGenerated && (
-              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flex: 1}}>
+              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flexShrink: 0}}>
                 <div className="sequence-header" style={{marginBottom: '16px'}}>
                   <div>
                     <div className="seq-kicker">INTERDISCIPLINARY INTEGRATION</div>
