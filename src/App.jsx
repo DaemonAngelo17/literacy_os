@@ -406,28 +406,31 @@ REQUIRED SCHEMATIC FORMAT:
     setIsLoadingCrossMatrix(true);
     setCrossMatrixOverrideError('');
     
-    let seqContext = "Auto-detect the most relevant sequence from the source text.";
-    if (selectedSequenceId !== 'auto') {
-      const seq = CURRICULUM_SEQUENCES.find(s => s.id === selectedSequenceId);
-      if (seq) {
-        seqContext = `[${seq.title}: ${seq.question}]. Ensure activities utilize these conceptual keywords: [${seq.keywords}].`;
-      }
-    }
+    const sequencesContext = CURRICULUM_SEQUENCES.map(seq => `[${seq.id} - ${seq.title}: ${seq.question}] (Keywords: ${seq.keywords})`).join('\n');
 
-    const prompt = `Act as an elite Interdisciplinary Curriculum Designer. You are integrating ELA with Social Studies/Science. Using the SOURCE TEXT, generate a 3-part lesson matrix bridging the text to this sequence: ${seqContext}
+    const prompt = `Act as an elite Interdisciplinary Curriculum Designer. You are integrating ELA with Social Studies/Science. Using the SOURCE TEXT, generate a 3-part lesson matrix bridging the text to EACH of the 8 curriculum sequences provided.
 STUDENT PROFILE: ${studentName}
 GRADE BAND: ${grade}
 CEFR PROFICIENCY: ${proficiency}
 SOURCE MATERIAL: ${material || 'None'}
 CALIBRATION OVERRIDE: The student's baseline grade is ${grade}, but you must adjust the COGNITIVE complexity of your questions by ${gradeModifier} levels (where -2 is heavily simplified and +2 is highly advanced). The baseline proficiency is ${proficiency}, but adjust the LINGUISTIC complexity of the output text by ${profModifier} levels.
 
-STRICT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include markdown code-fences.
+CURRICULUM SEQUENCES TO INTEGRATE:
+${sequencesContext}
+
+STRICT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include markdown code-fences. It must contain an array of EXACTLY 8 objects, one for each sequence.
 
 SCHEMA:
 {
-  "connectionOverview": "1 paragraph explaining how the text relates to the sequence...",
-  "discussionQuestions": ["Question 1...", "Question 2..."],
-  "inquiryActivity": "A specific, hands-on or research-based task..."
+  "sequences": [
+    {
+      "sequenceId": "Seq 1",
+      "sequenceTitle": "Exploration & Geography",
+      "connectionOverview": "1 paragraph explaining how the text relates to this specific sequence...",
+      "discussionQuestions": ["Question 1...", "Question 2..."],
+      "inquiryActivity": "A specific, hands-on or research-based task..."
+    }
+  ]
 }`;
 
     const result = await executeQuery(apiKey, prompt, '', false, null, previousLessonContext, studentProfileContext);
@@ -437,7 +440,7 @@ SCHEMA:
       try {
         const cleaned = result.replace(/```json|```/gi, '').trim();
         const data = JSON.parse(cleaned);
-        if (data.connectionOverview && data.discussionQuestions && data.inquiryActivity) {
+        if (data.sequences && Array.isArray(data.sequences)) {
           setCrossMatrix(data);
           return;
         }
@@ -446,18 +449,15 @@ SCHEMA:
       }
     }
     
-    const fallbackPrompt = `Act as an elite Interdisciplinary Curriculum Designer. My internal engine failed. I need you to build a Science/Social Studies integration matrix based on the text below.
+    const fallbackPrompt = `Act as an elite Interdisciplinary Curriculum Designer. My internal engine failed. I need you to build a Science/Social Studies integration matrix for ALL 8 sequences based on the text below.
 SOURCE TEXT: ${material || 'None'}
-TARGET SEQUENCE: ${seqContext}
 DIFFICULTY MODIFIERS: Cognitive shift: ${gradeModifier}. Linguistic shift: ${profModifier}.
 
-STRICT FORMATTING RULE: Return ONLY a raw, valid JSON object. No markdown.
-SCHEMA:
-{
-  "connectionOverview": "1 paragraph explaining how the text relates to the sequence...",
-  "discussionQuestions": ["Question 1...", "Question 2..."],
-  "inquiryActivity": "A specific, hands-on or research-based task..."
-}`;
+SEQUENCES:
+${sequencesContext}
+
+REQUIRED FORMAT:
+Return ONLY valid JSON matching: { "sequences": [ { "sequenceId": "...", "sequenceTitle": "...", "connectionOverview": "...", "discussionQuestions": ["..."], "inquiryActivity": "..." } ] }`;
     setFailSafeModal({ isOpen: true, type: 'CROSS_MATRIX', promptContent: fallbackPrompt });
   };
 
@@ -872,7 +872,7 @@ Make sure the 'bullets' array contains actionable, specific instructions tailore
   const strokeDashoffset = (2 * Math.PI * 24) - (progressPercentage / 100) * (2 * Math.PI * 24);
 
   // ── PRE-DOWNLOAD MODAL ──────────────────────────────────────────────────────
-  const DownloadModal = () => {
+  const renderDownloadModal = () => {
     const fallbackDownloadPrompt = `As an expert pedagogical assessor, write a final summary report for the student based on the following class session data.
 
 STUDENT NAME: ${studentName}
@@ -1006,7 +1006,7 @@ Please format your final feedback clearly with a summary of their performance, a
   };
 
   // ── VOCAB CONFIG MODAL ──────────────────────────────────────────────────────
-  const VocabConfigModal = () => (
+  const renderVocabConfigModal = () => (
     <div 
       className="modal-overlay"
       onClick={(e) => {
@@ -1071,7 +1071,7 @@ Please format your final feedback clearly with a summary of their performance, a
     </div>
   );
   // ── CALIBRATION MODAL ────────────────────────────────────────────────────────
-  const CalibrationModal = () => (
+  const renderCalibrationModal = () => (
     <div className="modal-overlay">
       <div className="modal-content" style={{maxWidth: '500px'}}>
         <div className="modal-header" style={{alignItems: 'center'}}>
@@ -1116,25 +1116,6 @@ Please format your final feedback clearly with a summary of their performance, a
               {gradeModifier === 0 ? 'Baseline' : gradeModifier > 0 ? `+${gradeModifier} Levels` : `${gradeModifier} Levels`}
             </div>
           </div>
-
-          {matrixTypeToGenerate === 'cross' && (
-            <div style={{display: 'flex', flexDirection: 'column', gap: '4px'}}>
-              <label className="dropdown-label">Cross-Disciplinary Curriculum Sequence</label>
-              <select 
-                className="custom-input" 
-                value={selectedSequenceId} 
-                onChange={e => setSelectedSequenceId(e.target.value)}
-                style={{width: '100%'}}
-              >
-                <option value="auto">Auto-Detect based on Text</option>
-                {CURRICULUM_SEQUENCES.map(seq => (
-                  <option key={seq.id} value={seq.id}>
-                    {seq.id} {seq.title}: {seq.question}
-                  </option>
-                ))}
-              </select>
-            </div>
-          )}
         </div>
 
         <div className="modal-footer" style={{display:'flex', gap:'12px'}}>
@@ -1309,9 +1290,9 @@ Please format your final feedback clearly with a summary of their performance, a
       )}
 
       {/* ── VOCAB CONFIG MODAL ── */}
-      {showVocabModal && <VocabConfigModal />}
-      {isDownloadModalOpen && <DownloadModal />}
-      {showCalibrationModal && <CalibrationModal />}
+      {showVocabModal && renderVocabConfigModal()}
+      {isDownloadModalOpen && renderDownloadModal()}
+      {showCalibrationModal && renderCalibrationModal()}
 
       {/* ── SIDEBAR ── */}
       <aside className="app-sidebar" style={{overflowY: 'auto'}}>
@@ -1780,22 +1761,29 @@ Please format your final feedback clearly with a summary of their performance, a
                   )}
                 </div>
 
-                {crossMatrix ? (
-                  <div className="matrix-container" style={{backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '16px', padding: '16px'}}>
-                    <div style={{marginBottom: '16px'}}>
-                      <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Connection Overview</h4>
-                      <p style={{fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>{crossMatrix.connectionOverview}</p>
-                    </div>
-                    <div style={{marginBottom: '16px'}}>
-                      <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Discussion Questions</h4>
-                      <ul style={{paddingLeft: '20px', margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>
-                        {crossMatrix.discussionQuestions.map((q, i) => <li key={i} style={{marginBottom: '8px'}}>{q}</li>)}
-                      </ul>
-                    </div>
-                    <div>
-                      <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Inquiry Activity</h4>
-                      <p style={{fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>{crossMatrix.inquiryActivity}</p>
-                    </div>
+                {crossMatrix && crossMatrix.sequences ? (
+                  <div style={{display: 'flex', flexDirection: 'column', gap: '24px', marginTop: '16px'}}>
+                    {crossMatrix.sequences.map((seq, idx) => (
+                      <div key={idx} className="matrix-container" style={{backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', padding: '16px'}}>
+                        <div style={{marginBottom: '16px', borderBottom: '1px solid var(--border-color)', paddingBottom: '8px'}}>
+                           <h4 style={{color: 'var(--text-main)', margin: 0, fontSize: '1rem'}}>{seq.sequenceId}: {seq.sequenceTitle}</h4>
+                        </div>
+                        <div style={{marginBottom: '16px'}}>
+                          <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Connection Overview</h4>
+                          <p style={{fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>{seq.connectionOverview}</p>
+                        </div>
+                        <div style={{marginBottom: '16px'}}>
+                          <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Discussion Questions</h4>
+                          <ul style={{paddingLeft: '20px', margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>
+                            {seq.discussionQuestions.map((q, i) => <li key={i} style={{marginBottom: '8px'}}>{q}</li>)}
+                          </ul>
+                        </div>
+                        <div>
+                          <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Inquiry Activity</h4>
+                          <p style={{fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>{seq.inquiryActivity}</p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 ) : <p style={{color: 'var(--text-muted)'}}>No cross-disciplinary matrix generated yet.</p>}
               </div>

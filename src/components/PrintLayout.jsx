@@ -61,25 +61,28 @@ const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficien
         </div>
       )}
 
-      {crossMatrix && (
-        <div className="print-section" style={{pageBreakInside: 'avoid'}}>
+      {crossMatrix && crossMatrix.sequences && (
+        <div className="print-section">
           <h2>Cross-Disciplinary Integration Matrix</h2>
-          <div style={{marginTop: '8px', fontSize: '0.85rem'}}>
-            <div style={{marginBottom: '12px'}}>
-              <strong>Connection Overview:</strong>
-              <p style={{marginTop: '4px'}}>{crossMatrix.connectionOverview}</p>
+          {crossMatrix.sequences.map((seq, idx) => (
+            <div key={idx} style={{marginTop: '16px', fontSize: '0.85rem', borderBottom: idx < crossMatrix.sequences.length - 1 ? '1px solid #eee' : 'none', paddingBottom: '16px', pageBreakInside: 'avoid'}}>
+              <h3 style={{fontSize: '1rem', marginBottom: '12px'}}>{seq.sequenceId}: {seq.sequenceTitle}</h3>
+              <div style={{marginBottom: '12px'}}>
+                <strong>Connection Overview:</strong>
+                <p style={{marginTop: '4px'}}>{seq.connectionOverview}</p>
+              </div>
+              <div style={{marginBottom: '12px'}}>
+                <strong>Discussion Questions:</strong>
+                <ul style={{marginTop: '4px', paddingLeft: '20px'}}>
+                  {seq.discussionQuestions.map((q, i) => <li key={i}>{q}</li>)}
+                </ul>
+              </div>
+              <div>
+                <strong>Inquiry Activity:</strong>
+                <p style={{marginTop: '4px'}}>{seq.inquiryActivity}</p>
+              </div>
             </div>
-            <div style={{marginBottom: '12px'}}>
-              <strong>Discussion Questions:</strong>
-              <ul style={{marginTop: '4px', paddingLeft: '20px'}}>
-                {crossMatrix.discussionQuestions.map((q, i) => <li key={i}>{q}</li>)}
-              </ul>
-            </div>
-            <div>
-              <strong>Inquiry Activity:</strong>
-              <p style={{marginTop: '4px'}}>{crossMatrix.inquiryActivity}</p>
-            </div>
-          </div>
+          ))}
         </div>
       )}
 
