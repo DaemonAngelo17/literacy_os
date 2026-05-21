@@ -482,8 +482,8 @@ Return ONLY valid JSON matching: { "sequences": [ { "sequenceId": "...", "sequen
     try {
       const cleaned = crossMatrixOverrideInput.replace(/```json|```/gi, '').trim();
       const parsedData = JSON.parse(cleaned);
-      if (!parsedData.connectionOverview || !parsedData.discussionQuestions || !parsedData.inquiryActivity) {
-        throw new Error("Missing cross matrix schema keys");
+      if (!parsedData.sequences || !Array.isArray(parsedData.sequences)) {
+        throw new Error("Missing sequences array in cross matrix schema");
       }
       setCrossMatrix(parsedData);
       setFailSafeModal({ isOpen: false, type: '', promptContent: '' });
