@@ -46,6 +46,17 @@ const ALL_AI_TOOLS = [
   { id: 'error', title: 'Error Logger', desc: 'Track errors. Feeds into AI memory!', promptPrefix: () => 'You are an error correction logger. Review these student errors, categorize them, and output concise teacher feedback.', type: 'GENERIC', color: 'var(--accent-red)' }
 ];
 
+const CURRICULUM_SEQUENCES = [
+  { id: 'Seq 1', title: 'Exploration & Geography', question: 'How does physical geography and exploration shape human societies?', keywords: 'Maps, Navigators, Topography, Cultural Exchange' },
+  { id: 'Seq 2', title: 'Power, Law & Government', question: 'What is the purpose of law, and how is power distributed?', keywords: 'Democracy, Monarchy, Constitution, Rights' },
+  { id: 'Seq 3', title: 'Conflict & Resolution', question: 'What are the roots of conflict, and how are lasting peace treaties formed?', keywords: 'Wars, Treaties, Diplomacy, Rebuilding' },
+  { id: 'Seq 4', title: 'Industrialization & Economy', question: 'How do technological advancements shift economic models?', keywords: 'Factories, Trade, Supply/Demand, Innovation' },
+  { id: 'Seq 5', title: 'Civil Rights & Social Movements', question: 'How do marginalized groups advocate for equality and justice?', keywords: 'Protest, Legislation, Equality, Activism' },
+  { id: 'Seq 6', title: 'Science, Reason & Philosophy', question: 'How do new ideas challenge established beliefs?', keywords: 'Enlightenment, Scientific Method, Philosophy, Paradigm Shift' },
+  { id: 'Seq 7', title: 'Global Interdependence', question: 'How do events in one nation affect the global community?', keywords: 'Globalization, Trade, Climate, Pandemics' },
+  { id: 'Seq 8', title: 'Ecosystems & Earth Systems', question: 'How do living and non-living elements interact to sustain life?', keywords: 'Biomes, Climate Change, Conservation, Interdependence' }
+];
+
 const formatTime = (totalSeconds) => {
   const m = Math.floor(totalSeconds / 60).toString().padStart(2, '0');
   const s = (totalSeconds % 60).toString().padStart(2, '0');
@@ -90,11 +101,20 @@ export default function App() {
   
   const [isLoadingVocab, setIsLoadingVocab] = useState(false);
   const [isLoadingMatrix, setIsLoadingMatrix] = useState(false);
+  const [isLoadingCrossMatrix, setIsLoadingCrossMatrix] = useState(false);
   const [isGeneratingPlan, setIsGeneratingPlan] = useState(false);
   const [showVocabSettings, setShowVocabSettings] = useState(false);
   const [showVocabModal, setShowVocabModal] = useState(false);
   const [activeMatrixTab, setActiveMatrixTab] = useState('type1');
   const [showClearConfirm, setShowClearConfirm] = useState(false);
+  const [crossMatrix, setCrossMatrix] = useLocalStorageState(`${sessionKey}_crossMatrix`, null);
+  const [crossMatrixOverrideInput, setCrossMatrixOverrideInput] = useState('');
+  const [crossMatrixOverrideError, setCrossMatrixOverrideError] = useState('');
+  const [profModifier, setProfModifier] = useState(0);
+  const [gradeModifier, setGradeModifier] = useState(0);
+  const [selectedSequenceId, setSelectedSequenceId] = useState('auto');
+  const [showCalibrationModal, setShowCalibrationModal] = useState(false);
+  const [matrixTypeToGenerate, setMatrixTypeToGenerate] = useState('deep');
   
   const [isDownloadModalOpen, setIsDownloadModalOpen] = useState(false);
   const [classDate, setClassDate] = useState(new Date().toISOString().split('T')[0]);
