@@ -1,6 +1,6 @@
 import React, { forwardRef } from 'react';
 
-const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficiency, duration, skills, material, roadmapText, learningMatrix, aiFinalFeedback, scores, activities, errors, sessionNotes, vocabList, vocabVisibility }, ref) => {
+const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficiency, duration, skills, material, roadmapText, learningMatrix, crossMatrix, aiFinalFeedback, scores, activities, errors, sessionNotes, vocabList, vocabVisibility }, ref) => {
   return (
     <div ref={ref} className="print-layout">
       <div className="print-header">
@@ -58,6 +58,28 @@ const PrintLayout = forwardRef(({ studentName, date, timeRange, grade, proficien
               ))}
             </tbody>
           </table>
+        </div>
+      )}
+
+      {crossMatrix && (
+        <div className="print-section" style={{pageBreakInside: 'avoid'}}>
+          <h2>Cross-Disciplinary Integration Matrix</h2>
+          <div style={{marginTop: '8px', fontSize: '0.85rem'}}>
+            <div style={{marginBottom: '12px'}}>
+              <strong>Connection Overview:</strong>
+              <p style={{marginTop: '4px'}}>{crossMatrix.connectionOverview}</p>
+            </div>
+            <div style={{marginBottom: '12px'}}>
+              <strong>Discussion Questions:</strong>
+              <ul style={{marginTop: '4px', paddingLeft: '20px'}}>
+                {crossMatrix.discussionQuestions.map((q, i) => <li key={i}>{q}</li>)}
+              </ul>
+            </div>
+            <div>
+              <strong>Inquiry Activity:</strong>
+              <p style={{marginTop: '4px'}}>{crossMatrix.inquiryActivity}</p>
+            </div>
+          </div>
         </div>
       )}
 

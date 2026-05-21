@@ -291,7 +291,15 @@ export default function App() {
     triggerToolFallback('Vocab Homework Maker', `Extract exactly ${vocabWordCount} high-value academic vocabulary words.`, 'Raw JSON array exactly like: [{ "word": "example", "pos": "noun", "definition": "...", "koreanTranslation": "...", "wordAssociation": "..." }]');
   };
 
-  const handleGenerateMatrix = async () => {
+  const handleOpenCalibrationModal = (type) => {
+    setMatrixTypeToGenerate(type);
+    setProfModifier(0);
+    setGradeModifier(0);
+    setSelectedSequenceId('auto');
+    setShowCalibrationModal(true);
+  };
+
+  const executeGenerateDeepMatrix = async () => {
     const apiKey = decryptData(encryptedApiKey);
     if (!apiKey) { alert("Please configure AI API KEY in App Settings first."); return; }
     
@@ -304,6 +312,7 @@ CEFR PROFICIENCY: ${proficiency}
 SOURCE MATERIAL: ${material || 'None'}
 ${prevDailyReport ? `PREVIOUS DAILY REPORT CONTEXT: ${prevDailyReport}` : ''}
 ${studentReport ? `STUDENT STRENGTHS & WEAKNESSES: ${studentReport}` : ''}
+CALIBRATION OVERRIDE: The student's baseline grade is ${grade}, but you must adjust the COGNITIVE complexity of your questions by ${gradeModifier} levels (where -2 is heavily simplified and +2 is highly advanced). The baseline proficiency is ${proficiency}, but adjust the LINGUISTIC complexity of the output text by ${profModifier} levels.
 
 STRICT OUTPUT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include introductory conversations, concluding text, or markdown code-fences (such as \`\`\`json). The output must be immediately parseable by JSON.parse().
 
@@ -347,6 +356,7 @@ CEFR PROFICIENCY: ${proficiency}
 SOURCE MATERIAL: ${material || 'None'}
 ${prevDailyReport ? `PREVIOUS DAILY REPORT CONTEXT: ${prevDailyReport}` : ''}
 ${studentReport ? `STUDENT STRENGTHS & WEAKNESSES: ${studentReport}` : ''}
+DIFFICULTY MODIFIERS: Shift cognitive complexity by ${gradeModifier} levels from base grade ${grade}. Shift linguistic vocabulary by ${profModifier} levels from base ${proficiency}.
 
 STRICT OUTPUT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include introductory conversations, concluding text, or markdown code-fences (such as \`\`\`json). The output must be immediately parseable by JSON.parse().
 
@@ -369,6 +379,68 @@ REQUIRED SCHEMATIC FORMAT:
     setFailSafeModal({ isOpen: true, type: 'MATRIX', promptContent: fallbackPrompt });
   };
 
+  const executeGenerateCrossMatrix = async () => {
+    const apiKey = decryptData(encryptedApiKey);
+    if (!apiKey) { alert("Please configure AI API KEY in App Settings first."); return; }
+    
+    setIsLoadingCrossMatrix(true);
+    setCrossMatrixOverrideError('');
+    
+    let seqContext = "Auto-detect the most relevant sequence from the source text.";
+    if (selectedSequenceId !== 'auto') {
+      const seq = CURRICULUM_SEQUENCES.find(s => s.id === selectedSequenceId);
+      if (seq) {
+        seqContext = `[${seq.title}: ${seq.question}]. Ensure activities utilize these conceptual keywords: [${seq.keywords}].`;
+      }
+    }
+
+    const prompt = `Act as an elite Interdisciplinary Curriculum Designer. You are integrating ELA with Social Studies/Science. Using the SOURCE TEXT, generate a 3-part lesson matrix bridging the text to this sequence: ${seqContext}
+STUDENT PROFILE: ${studentName}
+GRADE BAND: ${grade}
+CEFR PROFICIENCY: ${proficiency}
+SOURCE MATERIAL: ${material || 'None'}
+CALIBRATION OVERRIDE: The student's baseline grade is ${grade}, but you must adjust the COGNITIVE complexity of your questions by ${gradeModifier} levels (where -2 is heavily simplified and +2 is highly advanced). The baseline proficiency is ${proficiency}, but adjust the LINGUISTIC complexity of the output text by ${profModifier} levels.
+
+STRICT FORMATTING RULE: Return ONLY a raw, valid JSON object matching the exact schema below. Do not include markdown code-fences.
+
+SCHEMA:
+{
+  "connectionOverview": "1 paragraph explaining how the text relates to the sequence...",
+  "discussionQuestions": ["Question 1...", "Question 2..."],
+  "inquiryActivity": "A specific, hands-on or research-based task..."
+}`;
+
+    const result = await executeQuery(apiKey, prompt, '', false, null, previousLessonContext, studentProfileContext);
+    setIsLoadingCrossMatrix(false);
+
+    if (result) {
+      try {
+        const cleaned = result.replace(/```json|```/gi, '').trim();
+        const data = JSON.parse(cleaned);
+        if (data.connectionOverview && data.discussionQuestions && data.inquiryActivity) {
+          setCrossMatrix(data);
+          return;
+        }
+      } catch (e) {
+        console.error("Cross Matrix parsing failed:", e);
+      }
+    }
+    
+    const fallbackPrompt = `Act as an elite Interdisciplinary Curriculum Designer. My internal engine failed. I need you to build a Science/Social Studies integration matrix based on the text below.
+SOURCE TEXT: ${material || 'None'}
+TARGET SEQUENCE: ${seqContext}
+DIFFICULTY MODIFIERS: Cognitive shift: ${gradeModifier}. Linguistic shift: ${profModifier}.
+
+STRICT FORMATTING RULE: Return ONLY a raw, valid JSON object. No markdown.
+SCHEMA:
+{
+  "connectionOverview": "1 paragraph explaining how the text relates to the sequence...",
+  "discussionQuestions": ["Question 1...", "Question 2..."],
+  "inquiryActivity": "A specific, hands-on or research-based task..."
+}`;
+    setFailSafeModal({ isOpen: true, type: 'CROSS_MATRIX', promptContent: fallbackPrompt });
+  };
+
   const handleApplyMatrixOverride = () => {
     setMatrixOverrideError('');
     try {
@@ -382,6 +454,22 @@ REQUIRED SCHEMATIC FORMAT:
       setMatrixOverrideJson('');
     } catch (e) {
       setMatrixOverrideError("Invalid format. Ensure you copied only the exact JSON object output.");
+    }
+  };
+
+  const handleApplyCrossMatrixOverride = () => {
+    setCrossMatrixOverrideError('');
+    try {
+      const cleaned = crossMatrixOverrideInput.replace(/```json|```/gi, '').trim();
+      const parsedData = JSON.parse(cleaned);
+      if (!parsedData.connectionOverview || !parsedData.discussionQuestions || !parsedData.inquiryActivity) {
+        throw new Error("Missing cross matrix schema keys");
+      }
+      setCrossMatrix(parsedData);
+      setFailSafeModal({ isOpen: false, type: '', promptContent: '' });
+      setCrossMatrixOverrideInput('');
+    } catch (e) {
+      setCrossMatrixOverrideError("Invalid format. Ensure you copied only the exact JSON object output.");
     }
   };
 
@@ -978,6 +1066,106 @@ Please format your final feedback clearly with a summary of their performance, a
       </div>
     </div>
   );
+  // ── CALIBRATION MODAL ────────────────────────────────────────────────────────
+  const CalibrationModal = () => (
+    <div 
+      style={{
+        position: 'fixed', inset: 0, zIndex: 50,
+        display: 'flex', alignItems: 'center', justifyContent: 'center',
+        backgroundColor: 'rgba(0, 0, 0, 0.5)', backdropFilter: 'blur(4px)'
+      }}
+    >
+      <div 
+        style={{
+          width: '90%', maxWidth: '500px', backgroundColor: 'var(--bg-main)', 
+          borderRadius: '12px', padding: '24px', boxShadow: '0 20px 40px rgba(0,0,0,0.2)',
+          border: '1px solid var(--border-color)', display: 'flex', flexDirection: 'column'
+        }}
+      >
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '24px'}}>
+          <h2 style={{margin: 0, fontSize: '1.2rem', display: 'flex', alignItems: 'center', gap: '8px'}}>
+            <Settings size={20} style={{color: 'var(--accent-red)'}}/>
+            Pre-Generation Calibration
+          </h2>
+          <button className="icon-btn" onClick={() => setShowCalibrationModal(false)}><X size={20} /></button>
+        </div>
+
+        <div style={{marginBottom: '20px'}}>
+          <label className="dropdown-label">Linguistic Complexity (Proficiency) Shift</label>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <span style={{fontSize: '0.8rem'}}>-2</span>
+            <input 
+              type="range" min="-2" max="2" step="1" 
+              value={profModifier} 
+              onChange={e => setProfModifier(parseInt(e.target.value))} 
+              style={{flex: 1, margin: '0 12px'}}
+            />
+            <span style={{fontSize: '0.8rem'}}>+2</span>
+          </div>
+          <div style={{textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px'}}>
+            {profModifier === 0 ? 'Baseline' : profModifier > 0 ? `+${profModifier} Levels` : `${profModifier} Levels`}
+          </div>
+        </div>
+
+        <div style={{marginBottom: '24px'}}>
+          <label className="dropdown-label">Cognitive Complexity (Grade Level) Shift</label>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center'}}>
+            <span style={{fontSize: '0.8rem'}}>-2</span>
+            <input 
+              type="range" min="-2" max="2" step="1" 
+              value={gradeModifier} 
+              onChange={e => setGradeModifier(parseInt(e.target.value))} 
+              style={{flex: 1, margin: '0 12px'}}
+            />
+            <span style={{fontSize: '0.8rem'}}>+2</span>
+          </div>
+          <div style={{textAlign: 'center', fontSize: '0.85rem', color: 'var(--text-muted)', marginTop: '4px'}}>
+            {gradeModifier === 0 ? 'Baseline' : gradeModifier > 0 ? `+${gradeModifier} Levels` : `${gradeModifier} Levels`}
+          </div>
+        </div>
+
+        {matrixTypeToGenerate === 'cross' && (
+          <div style={{marginBottom: '24px'}}>
+            <label className="dropdown-label">Cross-Disciplinary Curriculum Sequence</label>
+            <select 
+              className="custom-input" 
+              value={selectedSequenceId} 
+              onChange={e => setSelectedSequenceId(e.target.value)}
+              style={{width: '100%'}}
+            >
+              <option value="auto">Auto-Detect based on Text</option>
+              {CURRICULUM_SEQUENCES.map(seq => (
+                <option key={seq.id} value={seq.id}>
+                  {seq.id} {seq.title}: {seq.question}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
+
+        <div style={{display:'flex', gap:'12px', marginTop:'16px', borderTop: '1px solid var(--border-color)', paddingTop: '16px'}}>
+          <button
+            className="btn-primary"
+            style={{flex:1, padding:'12px'}}
+            onClick={() => { 
+              setShowCalibrationModal(false); 
+              if (matrixTypeToGenerate === 'deep') executeGenerateDeepMatrix();
+              else executeGenerateCrossMatrix();
+            }}
+          >
+            ✦ Confirm & Generate
+          </button>
+          <button
+            className="icon-btn"
+            style={{padding:'12px 20px', border:'1px solid var(--border-color)'}}
+            onClick={() => setShowCalibrationModal(false)}
+          >
+            Cancel
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 
   return (
     <div className={`app-layout ${isDarkMode ? '' : 'light-theme'}`}>
@@ -1019,6 +1207,23 @@ Please format your final feedback clearly with a summary of their performance, a
                   {matrixOverrideError && <div style={{color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '8px'}}>{matrixOverrideError}</div>}
                   <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '12px'}}>
                     <button className="btn-primary" onClick={handleApplyMatrixOverride}>Incorporate Matrix Data</button>
+                  </div>
+                </div>
+              )}
+
+              {failSafeModal.type === 'CROSS_MATRIX' && (
+                <div style={{paddingTop: '16px', borderTop: '1px solid var(--border-color)'}}>
+                  <p style={{marginBottom: '8px', fontWeight: 'bold', color: 'var(--text-main)'}}>Paste Extracted Cross-Disciplinary Matrix Data</p>
+                  <textarea 
+                    className="custom-input custom-scrollbar" 
+                    style={{minHeight: '200px', resize: 'vertical', fontSize: '0.85rem', fontFamily: 'monospace'}}
+                    placeholder='Paste external LLM matrix JSON here...'
+                    value={crossMatrixOverrideInput}
+                    onChange={e => setCrossMatrixOverrideInput(e.target.value)}
+                  />
+                  {crossMatrixOverrideError && <div style={{color: 'var(--accent-red)', fontSize: '0.8rem', marginTop: '8px'}}>{crossMatrixOverrideError}</div>}
+                  <div style={{display: 'flex', justifyContent: 'flex-end', marginTop: '12px'}}>
+                    <button className="btn-primary" onClick={handleApplyCrossMatrixOverride}>Incorporate Cross-Disciplinary Data</button>
                   </div>
                 </div>
               )}
@@ -1112,6 +1317,7 @@ Please format your final feedback clearly with a summary of their performance, a
       {/* ── VOCAB CONFIG MODAL ── */}
       {showVocabModal && <VocabConfigModal />}
       {isDownloadModalOpen && <DownloadModal />}
+      {showCalibrationModal && <CalibrationModal />}
 
       {/* ── SIDEBAR ── */}
       <aside className="app-sidebar" style={{overflowY: 'auto'}}>
@@ -1553,13 +1759,51 @@ Please format your final feedback clearly with a summary of their performance, a
                     </h3>
                   </div>
                   {!isStudentView && !learningMatrix && material && (
-                     <button className="btn-primary" onClick={handleGenerateMatrix} disabled={isLoadingMatrix} style={{padding: '6px 12px', fontSize: '0.75rem'}}>
+                     <button className="btn-primary" onClick={() => handleOpenCalibrationModal('deep')} disabled={isLoadingMatrix} style={{padding: '6px 12px', fontSize: '0.75rem'}}>
                         {isLoadingMatrix ? 'GENERATING...' : 'Generate Matrix'}
                      </button>
                   )}
                 </div>
 
                 {learningMatrix ? renderMatrix() : <p style={{color: 'var(--text-muted)'}}>No learning matrix generated yet.</p>}
+              </div>
+            )}
+
+            {/* CROSS-DISCIPLINARY MATRIX SECTION */}
+            {(!isStudentView || (isStudentView && crossMatrix)) && isGenerated && (
+              <div style={{marginTop: '32px', display: 'flex', flexDirection: 'column', flex: 1}}>
+                <div className="sequence-header" style={{marginBottom: '16px'}}>
+                  <div>
+                    <div className="seq-kicker">INTERDISCIPLINARY INTEGRATION</div>
+                    <h3 className="seq-title" style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
+                      Cross-Disciplinary Matrix
+                    </h3>
+                  </div>
+                  {!isStudentView && !crossMatrix && material && (
+                     <button className="btn-primary" onClick={() => handleOpenCalibrationModal('cross')} disabled={isLoadingCrossMatrix} style={{padding: '6px 12px', fontSize: '0.75rem'}}>
+                        {isLoadingCrossMatrix ? 'GENERATING...' : 'Generate Matrix'}
+                     </button>
+                  )}
+                </div>
+
+                {crossMatrix ? (
+                  <div className="matrix-container" style={{backgroundColor: 'var(--panel-bg)', borderRadius: '8px', border: '1px solid var(--border-color)', marginTop: '16px', padding: '16px'}}>
+                    <div style={{marginBottom: '16px'}}>
+                      <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Connection Overview</h4>
+                      <p style={{fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>{crossMatrix.connectionOverview}</p>
+                    </div>
+                    <div style={{marginBottom: '16px'}}>
+                      <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Discussion Questions</h4>
+                      <ul style={{paddingLeft: '20px', margin: 0, fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>
+                        {crossMatrix.discussionQuestions.map((q, i) => <li key={i} style={{marginBottom: '8px'}}>{q}</li>)}
+                      </ul>
+                    </div>
+                    <div>
+                      <h4 style={{color: 'var(--accent-red)', marginBottom: '8px'}}>Inquiry Activity</h4>
+                      <p style={{fontSize: '0.9rem', color: 'var(--text-main)', lineHeight: '1.6'}}>{crossMatrix.inquiryActivity}</p>
+                    </div>
+                  </div>
+                ) : <p style={{color: 'var(--text-muted)'}}>No cross-disciplinary matrix generated yet.</p>}
               </div>
             )}
           {/* column spacer so scrollbar can reach past last element */}
@@ -1749,6 +1993,7 @@ Please format your final feedback clearly with a summary of their performance, a
              material={material}
              roadmapText={editableRoadmapSteps.map((step, i) => `${i+1}. ${step}`).join('\n\n')}
              learningMatrix={learningMatrix}
+             crossMatrix={crossMatrix}
              aiFinalFeedback={aiFinalFeedback}
              scores={scores}
              activities={activities}
